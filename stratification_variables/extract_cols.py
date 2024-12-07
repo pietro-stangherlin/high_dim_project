@@ -1,7 +1,6 @@
 import pandas as pd
 import json
 import sys
-import os
 
  # for each metadata file check if it contains exactly the
  # the selected rows
@@ -84,18 +83,15 @@ if __name__ == "__main__":
         no_path_metadata_file_names_list = [char.replace("\n", "") for char in no_path_metadata_file_names_list]
 
     metadata_files_path_folder = args[1]
-    print(metadata_files_path_folder)
 
     full_path_metadata_files_list = [f"{metadata_files_path_folder}{char}" for char in no_path_metadata_file_names_list]
-
-    print(full_path_metadata_files_list)
 
     # make a key for each different column in 
     # include relative path
     full_path_col_names_to_keep_file = args[2] # "col_names_to_keep_dp_2011.txt"
 
     # complete path 
-    years_list = args[3]
+    years_list = pd.read_csv(args[3])["year"]
 
     full_path_synonimous_dictionary = args[4]
 
@@ -138,9 +134,24 @@ if __name__ == "__main__":
     # Percent!!HISPANIC OR LATINO AND RACE!!Total population
 
     # test the function
-    test = MakeOccurenceDf(full_path_file_names_list = full_path_metadata_files_list,
+    occurence_df = MakeOccurenceDf(full_path_file_names_list = full_path_metadata_files_list,
                        list_only_description = list_only_description,
                        dict_synonymous = my_dict_syn,
                        years_list = years_list)
+    
+    # make live diagnostic
+    # check if all cells execpt for the column relative to year 
+    # are equal to one
+    
+    except_year_df = occurence_df.drop(columns = ["year"])
+    
+    # Check if all values in all columns are equal to 1
+    all_equal = (except_year_df == 1).all().all()
+    
+    if(all_equal):
+        print("All elements equal to 1: nice!")
+    else:
+        print("WARNING: NOT all elements are equal to one, diagnostic needed")
+    
 
-    test.to_csv(output_file_path, index = False)
+    occurence_df.to_csv(output_file_path, index = False)
