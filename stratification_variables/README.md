@@ -9,4 +9,5 @@ The script accepts many arguments (see the script for a description):
 ```python extract_cols.py .\file_names\\acs_dp_file_column_metadata_names.txt boro_social\boro_2010-2023\ .\boro_social\col_names_to_keep_dp_2011.txt years.csv .\boro_social\synonimous.json .\diagnostic\presence_only_desc_boro.csv```
 
 
-3) To make the actual aggregated data file
+3) To make the actual aggregated data file lunch *make_unique_csv.py* script with a similar syntax to the previuos script, only changing the file with the actual data file names and the output:
+```python make_unique_csv.py .\file_names\\acs_dp_file_data_names.txt boro_social\boro_2010-2023\ .\boro_social\col_names_to_keep_dp_2011.txt years.csv .\boro_social\synonimous.json .\final_datasets\acs_selected_boro.csv```
