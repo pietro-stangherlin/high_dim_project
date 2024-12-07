@@ -17,13 +17,15 @@ years_list = [int(el) for el in years_list] # convert to int
 
 names_pre_suffix = pd.read_csv(args[1])
 
+output_folder = args[2]
+
 # make file names
 for index, row in names_pre_suffix.iterrows():
     prefix = row["prefix"]
     suffix = row["suffix"]
     file_name = row["tag"]
     
-    with open(file = f"{file_name}.txt", mode = "w") as fout:
+    with open(file = f"{output_folder}{file_name}.txt", mode = "w") as fout:
         for i in range(len(years_list) - 1):
             fout.write(f"{prefix}{years_list[i]}{suffix}\n")
         fout.write(f"{prefix}{years_list[-1]}{suffix}")

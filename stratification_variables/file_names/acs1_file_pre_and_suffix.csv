@@ -1,0 +1,3 @@
+prefix,suffix,tag
+ACSDP1Y,.DP05-Data.csv,acs1_dp_file_data_names
+ACSDP1Y,.DP05-Column-Metadata.csv,acs1_dp_file_column_metadata_names

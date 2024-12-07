@@ -1,0 +1,9 @@
+ACSST5Y2011.S2503-Column-Metadata.csv
+ACSST5Y2012.S2503-Column-Metadata.csv
+ACSST5Y2013.S2503-Column-Metadata.csv
+ACSST5Y2014.S2503-Column-Metadata.csv
+ACSST5Y2015.S2503-Column-Metadata.csv
+ACSST5Y2016.S2503-Column-Metadata.csv
+ACSST5Y2019.S2503-Column-Metadata.csv
+ACSST5Y2021.S2503-Column-Metadata.csv
+ACSST5Y2022.S2503-Column-Metadata.csv
