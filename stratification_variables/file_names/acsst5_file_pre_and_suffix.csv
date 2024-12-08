@@ -1,0 +1,3 @@
+prefix,suffix,tag
+ACSST5Y,.S2503-Data.csv,acsst5_file_data_names
+ACSST5Y,.S2503-Column-Metadata.csv,acsst5_file_column_metadata_names
