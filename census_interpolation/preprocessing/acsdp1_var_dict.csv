@@ -1,0 +1,17 @@
+old_name,new_name
+year,Year
+Geographic Area Name,Borough
+Estimate!!SEX AND AGE!!Total population,Pop1
+Estimate!!SEX AND AGE!!Male,Male
+Percent!!SEX AND AGE!!Male,MaleP
+Estimate!!SEX AND AGE!!Female,Female
+Percent!!SEX AND AGE!!Female,FemaleP
+Estimate!!SEX AND AGE!!Median age (years),MdAge
+Estimate!!HISPANIC OR LATINO AND RACE!!Hispanic or Latino (of any race),Hsp1
+Percent!!HISPANIC OR LATINO AND RACE!!Hispanic or Latino (of any race),Hsp1P
+Estimate!!HISPANIC OR LATINO AND RACE!!Not Hispanic or Latino!!White alone,WNH
+Percent!!HISPANIC OR LATINO AND RACE!!Not Hispanic or Latino!!White alone,WHNP
+Estimate!!HISPANIC OR LATINO AND RACE!!Not Hispanic or Latino!!Black or African American alone,BNH
+Percent!!HISPANIC OR LATINO AND RACE!!Not Hispanic or Latino!!Black or African American alone,BNHP
+Estimate!!HISPANIC OR LATINO AND RACE!!Not Hispanic or Latino!!Asian alone,ANH
+Percent!!HISPANIC OR LATINO AND RACE!!Not Hispanic or Latino!!Asian alone,ANHP
