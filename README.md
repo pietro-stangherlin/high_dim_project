@@ -28,6 +28,7 @@ A third goal is to compare many models with a different choice of covariates: fo
 
 For the sake of simplicity we first focus on one census year and aggregate by time using months interval.
 If possible an analysis is done on all years from 2010 to 2023.
+For details see description files in each folder.
 
 ## Issues
 
