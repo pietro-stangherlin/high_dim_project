@@ -46,10 +46,11 @@ In this first scenario the smallest number of covariates is chosen:
 2) months for time data
 3) set of "importan" covariates
 
+First, from main project folder launch:
+```python complaints/filter_core.py core_datasets/complaints/NYPD_Complaint_Data_Historic_20241202.csv complaints/complaints_var_to_keep.csv RPT_DT 2020 core_datasets/complaints_2020.csv```
+
 ## Explorative Data analysis
 
-
 ## Models
-
 
 ### Model selection criterion
