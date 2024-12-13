@@ -19,7 +19,15 @@ Concerning other years not covered by census one data source are the [American C
 
 ## Goals
 
+The goal of this project are many.
+The first goal of the project is to try to describe the evolution of crime in time and space using promoting sparsity models to look for specific variables (including spatial and time ones) correlating with a particulare increase or decrease of the crime ratio (definitions will follow), a sort of change point.
+The second goal, strongly linked with the first is to actually see if the inducing sparsity model are amenable for this kind of analysis, both in term of interpretation and in computational resources needed and in regulation parameter selection.
+A third goal is to compare many models with a different choice of covariates: for example considering smaller or bigger spatial areas.
+
 ## Methods
+
+For the sake of simplicity we first focus on one census year and aggregate by time using months interval.
+If possible an analysis is done on all years from 2010 to 2023.
 
 ## Issues
 
