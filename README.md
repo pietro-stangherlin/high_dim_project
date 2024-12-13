@@ -16,6 +16,7 @@ Before describing a graph of [census geographic area hierachy](https://www.censu
 One source data is the [census data](https://www.nyc.gov/site/planning/planning-level/nyc-population/2020-census.page) which containts many variables for each census tract (small population area, about 2300 areas) which can be aggregated in Neighborhood Tabulation Areas (NTAs) (areas with dimension between counties and census tracts, about 260 areas) by the this [equivalence dataset](https://data.cityofnewyork.us/City-Government/2020-Census-Tracts-to-2020-NTAs-and-CDTAs-Equivale/hm78-6dwm/about_data).
 Census are decennal, so the two closest census are about years 2010 and 2020.
 Concerning other years not covered by census one data source are the [American Community Survey (ACS)](https://www.nyc.gov/site/planning/planning-level/nyc-population/american-community-survey.page). There two types of ACS: one yearly at macro level: in our case one for each of the six NYC Borought or quinquennial for micro areas and each data is an average of the previous 5 years, for more details see the official site.
+On bias source is that we assume each stratification variable fixed for each year.
 
 ## Goals
 
