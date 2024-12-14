@@ -46,8 +46,19 @@ In this first scenario the smallest number of covariates is chosen:
 2) months for time data
 3) set of "importan" covariates
 
-First, from main project folder launch:
-```python complaints/filter_core.py core_datasets/complaints/NYPD_Complaint_Data_Historic_20241202.csv complaints/complaints_var_to_keep.csv RPT_DT 2020 core_datasets/complaints_2020.csv```
+#### Instructions to reproduce the dataset used
+
+1) To get the 2020 data for select variables of complaints + time and spatial coordinates.
+From main project folder launch:
+```python edit_df/filter_core.py core_datasets/complaints/NYPD_Complaint_Data_Historic_20241202.csv complaints/complaints_var_to_keep.csv RPT_DT 2020 core_datasets/complaints_2020.csv```
+
+2) Add NTA indicator variables.
+From main project folder launch:
+```python  edit_df/add_spatial_zone.py core_datasets/complaints_2020.csv coordinates_maps/nta.geojson core_datasets/complaints_2020_nta.csv```
+
+3) Remove latidude and longitude coordinates variables.
+Add month variable and remove complete date time variable.
+Count by grouping all other variables (qualitative).
 
 ## Explorative Data analysis
 

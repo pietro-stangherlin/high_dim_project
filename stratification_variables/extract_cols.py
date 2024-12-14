@@ -2,8 +2,7 @@ import pandas as pd
 import json
 import sys
 
- # for each metadata file check if it contains exactly the
- # the selected rows
+ # for each metadata file check if it contains exactly the selected rows
  # a second possibility is to check only the presence of the column description
 
 
