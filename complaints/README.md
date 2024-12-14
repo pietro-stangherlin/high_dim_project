@@ -50,15 +50,24 @@ In this first scenario the smallest number of covariates is chosen:
 
 1) To get the 2020 data for select variables of complaints + time and spatial coordinates.
 From main project folder launch:
-```python edit_df/filter_core.py core_datasets/complaints/NYPD_Complaint_Data_Historic_20241202.csv complaints/complaints_var_to_keep.csv RPT_DT 2020 core_datasets/complaints_2020.csv```
+columns filtering:
+```python edit_df/filter_columns.py core_datasets/complaints/NYPD_Complaint_Data_Historic_20241202.csv complaints/complaints_var_to_keep.csv core_datasets/complaints_2020.csv```
 
-2) Add NTA indicator variables.
+row filtering by year:
+```python edit_df/filter_rows.py core_datasets/complaints_2020.csv RPT_DT 2020 core_datasets/complaints_2020.csv```
+
+2) Add MONTH variable
+```python edit_df/add_month.py core_datasets/complaints_2020.csv RPT_DT core_datasets/complaints_2020.csv```
+
+3) Add NTA indicator variables.
 From main project folder launch:
-```python  edit_df/add_spatial_zone.py core_datasets/complaints_2020.csv coordinates_maps/nta.geojson core_datasets/complaints_2020_nta.csv```
+```python edit_df/add_spatial_zone.py core_datasets/complaints_2020.csv coordinates_maps/nta.geojson core_datasets/complaints_2020_nta.csv```
 
-3) Remove latidude and longitude coordinates variables.
-Add month variable and remove complete date time variable.
-Count by grouping all other variables (qualitative).
+4) Remove latitude and longitude coordinates variables.
+Remove complete date time variable. (WARNING: we're using a different columns to keep file)
+```python edit_df/filter_columns.py core_datasets/complaints_2020_nta.csv complaints/complaints_v2_var_to_keep.csv core_datasets/complaints_2020_nta.csv```
+
+5) Count by grouping all other variables (qualitative).
 
 ## Explorative Data analysis
 

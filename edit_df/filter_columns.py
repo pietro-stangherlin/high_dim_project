@@ -7,13 +7,13 @@ def FilterColumns(df, var_df):
     '''Filter pandas dataframe columns.
     
     Args:
-    - df (pd.dataframe): pandas dataframe object
-    - var_df (list): pandas dataframe with variables to keep 
-    two columns: name, keep (0 or 1): if 1 keep, else discard
+        - df (pd.dataframe): pandas dataframe object
+        - var_df (list): pandas dataframe with variables to keep 
+        two columns: name, keep (0 or 1): if 1 keep, else discard
     
     Return: 
-    pd.dataframe of filtered pandas dataframe with only the columns
-    for which keep == 1 in var_df
+        pd.dataframe of filtered pandas dataframe with only the columns
+        for which keep == 1 in var_df
     '''
     
     var_to_keep_list = var_df[var_df["keep"] == 1]

@@ -5,43 +5,48 @@ import pandas as pd
 import sys
 from shapely.geometry import Point # used to find the corresponding spatial zone
 
-core_csv_path = sys.argv[1] # core csv dataset path
+def ConvertToGeodf(df, long = "Longitude", lat = "Latitude", crs = "EPSG:4326"):
+    '''
+    Args:
+        - crs (str): coordinates system
+    '''
+    # Create a GeoDataFrame from the CSV data
+    geometry = [Point(xy) for xy in zip(df[long], df[lat])]
+    # convert original data frame to geo pandas data frame
+    
+    gpdf = gpd.GeoDataFrame(df, geometry = geometry)
+    gpdf.crs = crs
+    
+    return(gpdf)
 
-# assume is a geojson
-zone_coordinates_json_path = sys.argv[2]
+def SJoinWithinGeo(geodf_units, geodf2_polygons):
+    '''Join two geopandas dataframes by latitude and longitude coordinates.
+    More specifically join by checking the which rows of geodf_units
+    fall inside poligons of geodf_polygons.
+    '''
+    return(gpd.sjoin(geodf_units, geodf2_polygons, how="left", predicate="within"))
 
-# variables to keep from the zone_coordinates_json dataframe
-vars_to_keep_coord = sys.argv[3]
+if __name__ == "__main__":
+    core_csv_path = sys.argv[1] # core csv dataset path
 
-output_path = sys.argv[4] # output file path
+    # assume is a geojson
+    zone_coordinates_json_path = sys.argv[2]
 
-# spatial coordinates names of core
-# if None use default
-# latitude_name_var = sys.argv[3]
-# longitude_name_var = sys.argv[4]
+    output_path = sys.argv[3] # output file path
 
-df = pd.read_csv(core_csv_path)
+    # spatial coordinates names of core
+    # if None use default
+    # latitude_name_var = sys.argv[3]
+    # longitude_name_var = sys.argv[4]
 
-# Read the GeoJSON file into a GeoDataFrame
-gdf = gpd.read_file(zone_coordinates_json_path)
+    df = pd.read_csv(core_csv_path)
 
-# Extract the CRS (coordinates system)
-crs = gdf.crs
+    # Read the GeoJSON file into a GeoDataFrame
+    gdf = gpd.read_file(zone_coordinates_json_path)
 
+    df_to_gpdf = ConvertToGeodf(df, crs = gdf.crs)
 
-# Create a GeoDataFrame from the CSV data
-geometry = [Point(xy) for xy in zip(df['Longitude'], df['Latitude'])]
-# convert original data frame to geo pandas data frame
-gdf_core = gpd.GeoDataFrame(df, geometry = geometry)
+    # debug
+    joined_gdf = SJoinWithinGeo(df_to_gpdf, gdf)
 
-# Perform the spatial join
-joined_gdf = gpd.sjoin(gdf_core, gdf, how="left", predicate="within")
-
-# Select the relevant columns
-# all
-# result = joined_gdf[['Latitude', 'Longitude', 'NTA2020']]
-
-# debug
-print(joined_gdf.columns)
-
-# joined_gdf.to_csv(output_path, index = False)
+    joined_gdf.to_csv(output_path, index = False)
