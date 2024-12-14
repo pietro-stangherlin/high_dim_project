@@ -46,7 +46,6 @@ if __name__ == "__main__":
 
     df_to_gpdf = ConvertToGeodf(df, crs = gdf.crs)
 
-    # debug
     joined_gdf = SJoinWithinGeo(df_to_gpdf, gdf)
 
     joined_gdf.to_csv(output_path, index = False)

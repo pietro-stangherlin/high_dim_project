@@ -9,5 +9,4 @@ df = pd.read_csv(core_path)
 
 # Loop through each column and print unique values
 for column in df.columns:
-    unique_values = df[column].unique()
-    print(f"Unique values in column '{column}': {unique_values}")
+    print(f"Unique values in column '{column}': { df[column].value_counts()}")

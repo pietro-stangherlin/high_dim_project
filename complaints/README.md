@@ -48,36 +48,7 @@ In this first scenario the smallest number of covariates is chosen:
 
 #### Instructions to reproduce the dataset used
 
-1) To get the 2020 data for select variables of complaints + time and spatial coordinates.
-From main project folder launch:
-    columns filtering:
-    ```python edit_df/filter_columns.py core_datasets/complaints/       NYPD_Complaint_Data_Historic_20241202.csv complaints/complaints_var_to_keep.csv     core_datasets/complaints_2020.csv```
-
-    row filtering by year:
-```python edit_df/filter_rows.py core_datasets/complaints_2020.csv RPT_DT 2020 core_datasets/complaints_2020.csv```
-
-2) Add MONTH variable
-```python edit_df/add_month.py core_datasets/complaints_2020.csv RPT_DT core_datasets/complaints_2020.csv```
-
-3) Add NTA indicator variables.
-From main project folder launch:
-```python edit_df/add_spatial_zone.py core_datasets/complaints_2020.csv coordinates_maps/nta.geojson core_datasets/complaints_2020_nta.csv```
-
-4) Remove latitude and longitude coordinates variables.
-Remove complete date time variable.
-(WARNING: we're using a different columns to keep file: complaints_v2)
-```python edit_df/filter_columns.py core_datasets/complaints_2020_nta.csv complaints/complaints_v2_var_to_keep.csv core_datasets/complaints_2020_nta.csv```
-
-5) Look for missing and most likely wrong values.
-```python edit_df/filter_columns.py core_datasets/complaints_2020_nta.csv complaints/complaints_v2_var_to_keep.csv core_datasets/complaints_2020_nta.csv```
-
-6) Count by grouping all other variables (qualitative).
-```python edit_df/check_uniques.py core_datasets/complaints_2020_nta.csv```
-We can notice some "UNKWON" and "(null)" values for many variables, also in the two age groups variables some strange values appear: negative ones and not clear.
-First we replace "UNKWON" and "(null)" with nan.
-For the age groups an ad hoc script is needed.
-
-7) Merge with social and economical census covariates (assumed constant through the year: this is a major bias source, especially for economical ones).
+Follow the jupyper notebook.
 
 ## Explorative Data analysis
 
