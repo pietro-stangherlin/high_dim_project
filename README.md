@@ -20,10 +20,17 @@ On bias source is that we assume each stratification variable fixed for each yea
 
 ## Goals
 
-The goal of this project are many.
-The first goal of the project is to try to describe the evolution of crime in time and space using promoting sparsity models to look for specific variables (including spatial and time ones) correlating with a particulare increase or decrease of the crime ratio (definitions will follow), a sort of change point.
+The goals of this project are many.
+The first goal of the project is to try to describe the evolution of crime in time and space using promoting sparsity models to look for specific variables (including spatial and time ones) correlating with a particulare increase or decrease of the crime ratio (definitions will follow).
+
 The second goal, strongly linked with the first is to actually see if the inducing sparsity model are amenable for this kind of analysis, both in term of interpretation and in computational resources needed and in regulation parameter selection.
 A third goal is to compare many models with a different choice of covariates: for example considering smaller or bigger spatial areas.
+
+### Arrests
+
+The arrests dataset comes with some interpretation problems: we don't know if the arrest has happened near (in space and time) the actual crime, but this is not a problem if we're more interested in the arrest itself. The goal is then to see if its arrests' rate is correlated with some specific variables: in particular it's of interest to see if interaction terms between spatial zone and crime charateristics seems relevant or not.
+
+### Complaints
 
 ## Methods
 

@@ -67,3 +67,11 @@ def AddMONTH(df, date_var_name, date_format = '%m/%d/%Y'):
     df['MONTH'] = df[date_var_name].dt.month
     
     return(df)
+
+def AddYEAR(df, date_var_name, date_format = '%m/%d/%Y'):
+    # Convert the date column to datetime 
+    df[date_var_name] = pd.to_datetime(df[date_var_name], format= date_format)
+    # Extract the month
+    df['YEAR'] = df[date_var_name].dt.year
+    
+    return(df)
