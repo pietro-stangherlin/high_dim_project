@@ -4,3 +4,5 @@ arrest_nta_boro.csv
 core_datasets/
 census_data/
 scenarios/
+.Rproj.user/
+final_datasets/
