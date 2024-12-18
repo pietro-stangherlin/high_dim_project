@@ -1,0 +1,119 @@
+Variable;Code;Keep
+Year;Year;0
+Type of Geography;GeoType;0
+County FIPS Code;FIPSCode;0
+Borough Code;BoroCode;0
+Geography Name;GeogName;0
+Unique Identifier for 2020 geographies;GeoID;1
+Total population;Pop1;1
+Male prop;MaleP;1
+Female prop;FemP;0
+Under 5 years;PopU5;0
+5 to 9 years;Pop5t9;0
+10 to 14 years;Pop10t14;0
+15 to 19 years;Pop15t19;0
+20 to 24 years;Pop20t24;0
+25 to 29 years;Pop25t29;0
+30 to 34 years;Pop30t34;0
+35 to 39 years;Pop35t39;0
+40 to 44 years;Pop40t44;0
+45 to 49 years;Pop45t49;0
+50 to 54 years;Pop50t54;0
+55 to 59 years;Pop55t59;0
+60 to 64 years;Pop60t64;0
+65 to 69 years;Pop65t69;0
+70 to 74 years;Pop70t74;0
+75 to 79 years;Pop75t79;0
+80 to 84 years;Pop80t84;0
+85 years and over;Pop85pl;0
+Median age (years);MdAge;1
+Under 18 years;PopU18;0
+65 years and over;Pop65pl;0
+Age dependency ratio;AgDpdRt;0
+Old-age dependency ratio;OdAgDpdRt;0
+Child dependency ratio;ChldDpdRt;0
+Population per acre;PopAcre;0
+Total population;Pop2;0
+Hispanic prop;Hsp1;1
+White non-Hispanic prop;WNH;1
+Black non-Hispanic prop;BNH;1
+Asian non-Hispanic prop;ANH;1
+Some other race non-Hispanic;ONH;0
+Non-Hispanic of two or more races;TwoPlNH;0
+Total population;Pop3;0
+In households;PopInHH_1;0
+Householder;HHldr;0
+Spouse;Spouse;0
+Opposite-sex spouse;OpSxS;0
+Same-sex spouse;SmSxS;0
+Unmarried partner;UMrdPtnr;0
+Opposite-sex unmarried partner;OpSxUMrd;0
+Same-sex unmarried partner;SmSxUMrd;0
+Child;Child;0
+Under 18 years;ChildU18;0
+Grandchild;GrndCh;0
+Under 18 years;GrndChU18;0
+Other relatives;OthrRel;0
+Nonrelatives;NonRel;0
+In group quarters;InGrpQtrs;0
+Institutionalized population;Institlzd;0
+Correctional facilities for adults;GQCrctl;0
+Juvenile facilities;GQJuv;0
+Nursing facilities/Skilled-nursing facilities;GQNrsng;0
+Other institutional facilities;GQOInst;0
+Noninstitutionalized population;NoInstlzd;0
+College/University student housing;GQClgHsg;0
+Military quarters;GQMltry;0
+Other noninstitutional facilities;GQONInst;0
+Total households;HH_1;0
+Family households (families);Fam;0
+Nonfamily households;NFamHH;0
+Householder under 65 years;NFmHHU65;0
+Householder living alone;NFmLvgAln;0
+Householder 65 years and over;NFLvA65pl;0
+Total households;HH_2;0
+Married couple household;MrdCplHH;0
+With own children under 18;MrdCh18;0
+Cohabiting couple household;CoCplHH;0
+With own children under 18;CoCplCh18;0
+Male householder, no spouse or partner present;MaleHHNS;0
+With own children under 18;MnSPChU18;0
+Female householder, no spouse or partner present;FemHHNS;0
+With own children under 18;FnSPChU18;0
+Households with individuals under 18 years;HHwU18;0
+Households with individuals 65 years and over;HHw65pl;0
+Total housing units;HUnits;0
+Occupied housing units;OcHU_1;0
+Vacant housing units;VacHUs;0
+For rent;VHUFRnt;0
+Rented, not occupied;VHURNOc;0
+For sale only;VHUFSlO;0
+Sold, not occupied;VHUSNOc;0
+For seasonal, recreational, or occasional;VHUFSRoOU;0
+For migrant workers;VHUMigWrk;0
+Other vacant;VHUOthVc;0
+Homeowner vacancy rate (percent);HmOwnVcRt;0
+Rental vacancy rate (percent);RntVcRt;0
+Occupied housing units;OcHU_2;0
+Owner-occupied housing units;OOcHU_1;0
+Renter-occupied housing units;ROcHU_1;0
+Total occupied housing units;OcHU_3;0
+1-person household;HH1person;0
+2-person household;HH2ppl;0
+3-person household;HH3ppl;0
+4-person household;HH4ppl;0
+5-or-more person household;HH5plPpl;0
+Average household size;AvgHHSz;0
+Owner-occupied housing units;OOcHU_2;0
+1-person household;OOcHH1;0
+2-person household;OOcHH2;0
+3-person household;OOcHH3;0
+4-person household;OOcHH4;0
+5-or-more person household;OOcHH5pl;0
+Renter-occupied housing units;ROcHU_2;0
+1-person household;ROcHH1;0
+2-person household;ROcHH2;0
+3-person household;ROcHH3;0
+4-person household;ROcHH4;0
+5-or-more person household;ROcHH5pl;0
+Land Acres;LandAcres;0

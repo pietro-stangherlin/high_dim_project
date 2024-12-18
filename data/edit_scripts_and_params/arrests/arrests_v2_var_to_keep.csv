@@ -17,5 +17,6 @@ X_COORD_CD,0
 Y_COORD_CD,0
 Latitude,0
 Longitude,0
-NTA2020,1
-CTLabel,1
+nta2020,1
+boroct2020,1
+MONTH,1
