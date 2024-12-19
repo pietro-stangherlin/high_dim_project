@@ -1,4 +1,4 @@
-Variable;Code;Keep
+description;name;keep
 Year;Year;0
 Type of Geography;GeoType;0
 County FIPS Code;FIPSCode;0
@@ -6,7 +6,7 @@ Borough Code;BoroCode;0
 Geography Name;GeogName;0
 Unique Identifier for 2020 geographies;GeoID;1
 Total population;Pop1;1
-Male prop;MaleP;1
+Male prop;Male P;1
 Female prop;FemP;0
 Under 5 years;PopU5;0
 5 to 9 years;Pop5t9;0
@@ -34,10 +34,10 @@ Old-age dependency ratio;OdAgDpdRt;0
 Child dependency ratio;ChldDpdRt;0
 Population per acre;PopAcre;0
 Total population;Pop2;0
-Hispanic prop;Hsp1;1
-White non-Hispanic prop;WNH;1
-Black non-Hispanic prop;BNH;1
-Asian non-Hispanic prop;ANH;1
+Hispanic prop;Hsp1P;1
+White non-Hispanic prop;WNHP;1
+Black non-Hispanic prop;BNHP;1
+Asian non-Hispanic prop;ANHP;1
 Some other race non-Hispanic;ONH;0
 Non-Hispanic of two or more races;TwoPlNH;0
 Total population;Pop3;0
