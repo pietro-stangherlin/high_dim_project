@@ -10,36 +10,61 @@ library(Matrix)
 rm(list = ls())
 gc()
 ```
-
-## Description
-
-### Variables Description
-
-
-
-## Explorative analysis
-
+## Preprocessing
 ```{r}
 # read the data
 my.df = read.csv("../../data/core_datasets/arrests/arrests_2010_cta.csv", stringsAsFactors = T)
 ```
 
+Remove date and NTA variables, convert to factor location, month and KY_CD.
+```{r}
+my.df$ARREST_DATE = NULL
+my.df$nta2020 = NULL
+my.df$GeoID = NULL # redundant with geoid
+
+my.df$geoid = factor(my.df$geoid)
+my.df$MONTH = factor(my.df$MONTH)
+
+# add NA category
+my.df$KY_CD = ifelse(is.na(my.df$KY_CD), "MISSING", my.df$KY_CD)
+my.df$KY_CD = factor(my.df$KY_CD)
+```
+
+
 ```{r}
 str(my.df)
 ```
+
+Check for NA
 ```{r}
-my.df$Male.P %>% summary
+apply(my.df, 2, function(col) (sum(is.na(col))))
 ```
 
 
-Group by all variables and create a new variable for the count.
+A possibility is to get rid of all NAs rows, the portion of deleted rows would be relatively small (of course we're introducing some bias here).
 ```{r}
-grouped_com <- com_20_nta %>%
-  group_by(across(everything())) %>%
-  summarise(count = n())
-
-dim(grouped_com)
+nrow(na.omit(my.df)) / nrow(my.df)
 ```
+Other possibilities would be to impute values for numerical variables (using median, mean or more sofisticated methods).
+For simplicity we just delete missing values rows.
+```{r}
+my.df = na.omit(my.df)
+```
+
+
+## Description
+Ideally 2010 data are our training set and 2011 data are the test set.
+
+### Variables Description
+
+## Explorative analysis
+A reasonable response variable would be the count of crimes
+
+## Models
+
+### Model selection and issues
+Here are present both spatial and temporal variables.
+
 
 
 
