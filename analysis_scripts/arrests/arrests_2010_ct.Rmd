@@ -1,0 +1,49 @@
+---
+title: "Arrests 2010 Census Tracts analysis"
+output: pdf_document
+---
+
+```{r}
+library(tidyverse)
+library(Matrix)
+
+rm(list = ls())
+gc()
+```
+
+## Description
+
+### Variables Description
+
+
+
+## Explorative analysis
+
+```{r}
+# read the data
+my.df = read.csv("../../data/core_datasets/arrests/arrests_2010_cta.csv", stringsAsFactors = T)
+```
+
+```{r}
+str(my.df)
+```
+```{r}
+my.df$Male.P %>% summary
+```
+
+
+Group by all variables and create a new variable for the count.
+```{r}
+grouped_com <- com_20_nta %>%
+  group_by(across(everything())) %>%
+  summarise(count = n())
+
+dim(grouped_com)
+```
+
+
+
+
+
+
+

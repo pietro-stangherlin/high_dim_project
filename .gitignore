@@ -2,7 +2,6 @@ __pycache__/
 arrest_nta_boro.csv
 .Rhistory
 core_datasets/
-census_data/
 scenarios/
 .Rproj.user/
 final_datasets/
