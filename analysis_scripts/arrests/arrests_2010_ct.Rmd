@@ -3,7 +3,12 @@ title: "Arrests 2010 Census Tracts analysis"
 output: pdf_document
 ---
 
-```{r}
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(fig.align = 'center')
+```
+
+```{r, message=FALSE}
 library(tidyverse)
 library(Matrix)
 
@@ -54,16 +59,159 @@ my.df = na.omit(my.df)
 
 ## Description
 Ideally 2010 data are our training set and 2011 data are the test set.
+The goal of the analysis is to identify is some covariates are correlated with the arrests rate: more specifically if the response is well explained by some non spatial covariates alone, some spatial alone or interaction between the two.
 
-### Variables Description
+A reasonable response variable would be the count of arrests divided by the local (space zone) population, also grouping by any other covariates value.
+
+
+
+To get an idea of the dataset used on which models are tested a
+```{r}
+year_grouped = my.df %>%
+  select(-MONTH) %>% 
+  group_by_all() %>% 
+  summarise(count = n())
+
+# define the arrest rate (count / population)
+year_grouped$y =  year_grouped$count / year_grouped$Pop1
+
+```
+
+```{r}
+dim(year_grouped)
+colnames(year_grouped)
+```
+Still a huge number of observations compared to the number of variables, but what if we add interactions?
+
+Let's look at the distribution of the counts
+```{r}
+year_grouped$count %>%
+  table %>% 
+  plot(main = "Arrests counts grouped by covariates",
+       xlab = "arrest number",
+       ylab = "absolute frequency")
+```
+We can see an inflation of ones.
+The ratios present a similar table.
+```{r}
+year_grouped$y %>%
+  table %>% 
+  plot(main = "Arrests ratio grouped by covariates",
+       xlab = "number of arrests / census tract population",
+       ylab = "absolute frequency")
+```
+
+
+Let's count the hipothetical number of interaction terms if ones considers only interactions between spatial zones and selected arrests covariates along with the obervations /  number of parameter ratio (underestimate since there are other variables):
+```{r}
+var_unique_len = apply(year_grouped,
+                       2,
+                       function(col) length(unique(col)))
+
+var_unique_len
+```
+
+Not including KY_CD:
+```{r}
+var_unique_len["geoid"] *
+  sum(var_unique_len[c("LAW_CAT_CD", "AGE_GROUP", "PERP_SEX", "PERP_RACE")])
+
+nrow(year_grouped) / (var_unique_len["geoid"] *
+  sum(var_unique_len[c("LAW_CAT_CD", "AGE_GROUP", "PERP_SEX", "PERP_RACE")]))
+```
+
+Including KY_CD
+```{r}
+var_unique_len["geoid"] *
+  sum(var_unique_len[c("KY_CD","LAW_CAT_CD", "AGE_GROUP",
+                       "PERP_SEX", "PERP_RACE")])
+
+nrow(year_grouped) / (var_unique_len["geoid"] *
+  sum(var_unique_len[c("KY_CD", "LAW_CAT_CD", "AGE_GROUP",
+                       "PERP_SEX", "PERP_RACE")]))
+```
+The ratio is already less than one.
+Given the inflation of ones it seems clear that some compromise has to be adopted one possibility is to not include interactions between KY_CD variable hoping that the less detailed LAW_CAT_CD variable would still give some insights.
+We decide to not employ the MONTH time variable as a covariate but use it for a model selection method.
+
+
+### Variables description
+
+Original dataset selected variables:
+
+Census stratification variables:
+
 
 ## Explorative analysis
-A reasonable response variable would be the count of crimes
+
 
 ## Models
 
-### Model selection and issues
-Here are present both spatial and temporal variables.
+### Model selection method
+
+Given the previously described constraints, in order to be able to apply a cross validation (CV) selection method we choose to ignore the time (MONTH) factor using MONTH as index to create the CV folds as described below.
+Choose k: the number of validation sets (example k = 4) each validation set is made by grouped observations of 12 / k (3) months and the months left are used to fit the model. To try to compensate and average for seasonal fluctuations the validation months are chosen as spaced as possible, for example, in the case k = 4 the first validation set is (january, may, september), the second set is (february, june, october), the third is (march, july, november) and the forth is (april, august, december); in order to make each response comparable having used a different number of months a new response is defined as the arrests ratio divided by the number of months used in the grouping.
+
+```{r}
+# Groub by months indexes
+GroupByMONTHSets = function(mydf, month_indexes){
+  month_grouped = my.df %>%
+    filter(MONTH %in% month_indexes)
+    select(-MONTH) %>% 
+  group_by_all() %>% 
+  summarise(count = n())
+  
+  month_grouped$y = month_grouped$count /
+    (month_grouped$Pop1 * length(month_indexes))
+  
+  month_grouped$count = NULL
+  
+  return(month_grouped)
+}
+```
+
+```{r}
+# months indexes sets
+# each list contains a matrix where each row contains the used indexes
+month_sets_ind = list(k4 = matrix(c(1, 5, 9,
+                                    2, 6, 10,
+                                    3, 7, 11,
+                                    4, 8, 12),
+                                  byrow = T,
+                                  nrow = 4),
+                      k6 = matrix(c(1, 7,
+                                    2, 8,
+                                    3, 9,
+                                    4, 10,
+                                    5, 11,
+                                    6, 12),
+                                  byrow = T,
+                                  nrow = 6))
+```
+
+
+
+### Note on quantitative covariates
+The simplest assumption is to assume a linear (monotone) trend of the response as a function of quantitative covariates.
+
+### LASSO
+
+```{r}
+library(glmnet)
+
+# first compute a lambda grid on all the grouped dataset
+
+
+
+```
+
+
+### Elasticnet
+
+### Scad MCP
+
+### Grouped LASSO
+
 
 
 
