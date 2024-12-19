@@ -1,5 +1,5 @@
 ---
-title: "Arrests 2010 Census Tracts analysis"
+title: "Arrests 2010 NTA analysis"
 output: pdf_document
 ---
 
@@ -18,16 +18,14 @@ gc()
 ## Preprocessing
 ```{r}
 # read the data
-my.df = read.csv("../../data/core_datasets/arrests/arrests_2010_cta.csv", stringsAsFactors = T)
+my.df = read.csv("../../data/core_datasets/arrests/arrests_2010_nta.csv", stringsAsFactors = T)
 ```
 
 Remove date and NTA variables, convert to factor location, month and KY_CD.
 ```{r}
 my.df$ARREST_DATE = NULL
-my.df$nta2020 = NULL
-my.df$GeoID = NULL # redundant with geoid
 
-my.df$geoid = factor(my.df$geoid)
+my.df$NTA2020 = factor(my.df$NTA2020)
 my.df$MONTH = factor(my.df$MONTH)
 
 # add NA category
@@ -113,25 +111,23 @@ var_unique_len
 
 Not including KY_CD:
 ```{r}
-var_unique_len["geoid"] *
+var_unique_len["NTA2020"] *
   sum(var_unique_len[c("LAW_CAT_CD", "AGE_GROUP", "PERP_SEX", "PERP_RACE")])
 
-nrow(year_grouped) / (var_unique_len["geoid"] *
+nrow(year_grouped) / (var_unique_len["NTA2020"] *
   sum(var_unique_len[c("LAW_CAT_CD", "AGE_GROUP", "PERP_SEX", "PERP_RACE")]))
 ```
 
 Including KY_CD
 ```{r}
-var_unique_len["geoid"] *
+var_unique_len["NTA2020"] *
   sum(var_unique_len[c("KY_CD","LAW_CAT_CD", "AGE_GROUP",
                        "PERP_SEX", "PERP_RACE")])
 
-nrow(year_grouped) / (var_unique_len["geoid"] *
+nrow(year_grouped) / (var_unique_len["NTA2020"] *
   sum(var_unique_len[c("KY_CD", "LAW_CAT_CD", "AGE_GROUP",
                        "PERP_SEX", "PERP_RACE")]))
 ```
-The ratio is already less than one.
-Given the inflation of ones it seems clear that some compromise has to be adopted one possibility is to not include interactions between KY_CD variable hoping that the less detailed LAW_CAT_CD variable would still give some insights.
 We decide to not employ the MONTH time variable as a covariate but use it for a model selection method.
 
 
@@ -198,16 +194,20 @@ df1 = GroupByMONTHSets(mydf = my.df,
 df2 = GroupByMONTHSets(mydf = my.df,
                        month_indexes = setdiff(1:12, month_sets_ind$k4[1,]))
 
-mm1 = sparse.model.matrix(rep(1, nrow(df1)) ~. -1 + geoid:LAW_CAT_CD +
-                            geoid:AGE_GROUP +
-                            geoid:PERP_SEX +
-                            geoid:PERP_RACE,
+mm1 = sparse.model.matrix(rep(1, nrow(df1)) ~. -1 + 
+                            NTA2020:LAW_CAT_CD +
+                            NTA2020:AGE_GROUP +
+                            NTA2020:PERP_SEX +
+                            NTA2020:PERP_RACE + 
+                            NTA2020:KY_CD,
                           data = df1)
 
-mm2 = sparse.model.matrix(rep(1, nrow(df2)) ~. -1 + geoid:LAW_CAT_CD +
-                            geoid:AGE_GROUP +
-                            geoid:PERP_SEX +
-                            geoid:PERP_RACE,
+mm2 = sparse.model.matrix(rep(1, nrow(df2)) ~. -1 +
+                            NTA2020:LAW_CAT_CD +
+                            NTA2020:AGE_GROUP +
+                            NTA2020:PERP_SEX +
+                            NTA2020:PERP_RACE +
+                            NTA2020:KY_CD,
                           data = df2)
 ```
 
