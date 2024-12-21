@@ -81,26 +81,49 @@ colnames(year_grouped)
 ```
 Still a huge number of observations compared to the number of variables, but what if we add interactions?
 
-Let's look at the distribution of the counts
+Let's look at the distribution of the counts.
 ```{r}
 year_grouped$count %>%
   table %>% 
-  plot(main = "Arrests counts grouped by covariates",
-       xlab = "arrest number",
+  plot(main = "Arrests counts grouped by all covariates observed combinations",
+       xlab = "arrest count",
        ylab = "absolute frequency")
 ```
 We can see an inflation of ones.
-The ratios present a similar table.
+The ratios present a similar frequency table. Taking the logarithm of the ratio the distribution is still (a bit less) skewed.
 ```{r}
+par(mfrow = c(1,2))
+
 year_grouped$y %>%
   table %>% 
   plot(main = "Arrests ratio grouped by covariates",
-       xlab = "number of arrests / census tract population",
+       xlab = "number of arrests / nta population",
        ylab = "absolute frequency")
+
+year_grouped$y %>% 
+  log %>% 
+  table %>% 
+  plot(main = " log arrests ratio grouped by covariates",
+       xlab = "log(number of arrests / nta population)",
+       ylab = "absolute frequency")
+
+par(mfrow = c(1,1))
 ```
 
 
-Let's count the hipothetical number of interaction terms if ones considers only interactions between spatial zones and selected arrests covariates along with the obervations /  number of parameter ratio (underestimate since there are other variables):
+
+```{r}
+# to include zeros
+year_grouped_zeros <- my.df %>%
+  select(-MONTH) %>%
+  group_by_all() %>%
+  summarise(count = n(), .groups = 'drop') %>%
+  ungroup() %>%
+  complete(KY_CD, LAW_CAT_CD, fill = list(count = 0))
+```
+
+
+Let's count the hypothetical number of interaction terms if ones considers only interactions between spatial zones and selected arrests covariates along with the obervations /  number of parameter ratio (underestimate since there are other variables):
 ```{r}
 var_unique_len = apply(year_grouped,
                        2,
@@ -140,6 +163,18 @@ Census stratification variables:
 
 ## Explorative analysis
 
+### Arrests count vs month
+```{r}
+my.df %>% 
+  group_by_at(vars(MONTH)) %>%
+  summarise(count = n()) %>% 
+  plot(main = "Arrests count by month")
+```
+
+
+### Arrests counts vs NTA
+
+### Arrest counts vs other covariates
 
 ## Models
 
@@ -184,8 +219,9 @@ month_sets_ind = list(k4 = matrix(c(1, 5, 9,
                                   nrow = 6))
 ```
 
-In order to simplify computations we remove the KY_CD variable (hoping LAW_CAT_CD will be sufficient to describe the crime tipe)
-
+In order to simplify computations we remove the KY_CD variable (hoping LAW_CAT_CD will be sufficient to describe the crime type)
+when using a linear model (assuming gaussian errors) we consider the response as: 
+$y = \log(\text{count} / \text{population})$ where each count is the events count obtained by grouping by all other covariates and each population is specific to each NTA.
 ```{r}
 my.df$KY_CD = NULL
 
@@ -194,7 +230,8 @@ my.df.year.grouped = my.df %>%
   group_by_all() %>% 
   summarise(count = n())
 
-my.df.year.grouped$y = my.df.year.grouped$count / my.df.year.grouped$Pop1
+# take the log to 
+my.df.year.grouped$y = log(my.df.year.grouped$count / my.df.year.grouped$Pop1)
 ```
 
 
@@ -217,6 +254,14 @@ RMSEfun = function(true_vals, pred_vals){
 
 Model matrices: omit KY_CD variables due to computational issues.
 Make a list of fit and validation sets:
+
+```{r}
+# function to write
+
+# MakeCVSets = function(original_df, )
+
+```
+
 
 ```{r, warning=FALSE, message=FALSE}
 
@@ -258,14 +303,18 @@ library(glmnet)
 
 # first compute a lambda grid on all grouped dataset
 
-all.fit = glmnet(x = sparse.model.matrix(FORMULA.NO.KY_CD, data = my.df.year.grouped),
+lambda.vals = exp(seq(-20, -6, 0.1))
+
+all.fit = glmnet(x = sparse.model.matrix(FORMULA.NO.KY_CD,
+                                         data = my.df.year.grouped),
                  y = my.df.year.grouped$y,
-                 alpha = 1)
+                 alpha = 1,
+                 lambda = lambda.vals)
 
 # validation error matrix
 # each col
 lasso.cv.error.matr = matrix(NA,
-                             nrow = length(all.fit$lambda),
+                             nrow = length(lambda.vals),
                              ncol = nrow(month_sets_ind$k4))
 
 
@@ -273,15 +322,15 @@ for (i in 1:dim(lasso.cv.error.matr)[2]){
   temp.lasso = glmnet(x = month.fit.val.k4.sets[[i]]$train$model_matrix,
                  y = month.fit.val.k4.sets[[i]]$train$y,
                  alpha = 1,
-                 lambda = all.fit$lambda)
+                 lambda = lambda.vals)
   
   pred.lasso = predict.glmnet(temp.lasso,
                               newx = month.fit.val.k4.sets[[i]]$test$model_matrix)
   
   lasso.cv.error.matr[,i] = apply(pred.lasso,
                                   2,
-                                  function(col) RMSEfun(true_vals = month.fit.val.k4.sets[[i]]$test$y,
-                                                        pred_vals = col))
+                                  function(col) RMSEfun(true_vals = exp(month.fit.val.k4.sets[[i]]$test$y),
+                                                        pred_vals = exp(col)))
   
   rm(temp.lasso)
   rm(pred.lasso)
@@ -291,25 +340,166 @@ for (i in 1:dim(lasso.cv.error.matr)[2]){
 
 ```
 
+
+
+```{r}
+# find cv error average and s.e
+lasso.lambda.errs = cbind(lambda.vals %>% sort(decreasing = T),
+                          apply(lasso.cv.error.matr,1,mean),
+                          apply(lasso.cv.error.matr,1,sd)/ncol(lasso.cv.error.matr))
+
+```
+
+
 ```{r}
 
-plot(log(all.fit$lambda), apply(lasso.cv.error.matr, 1, mean),
+plot(log(lasso.lambda.errs[,1]), lasso.lambda.errs[,2],
      xlab = "log lambda",
      ylab = "RMSE",
      main = "LASSO CV error",
-     xlim = c(-13, -10),
-     ylim = c(0.23, 0.25),
      pch = 16,
      type = "b")
+
+points(log(lasso.lambda.errs[,1]),
+       lasso.lambda.errs[,2] + lasso.lambda.errs[,3], type = "l", col = "red")
+points(log(lasso.lambda.errs[,1]), lasso.lambda.errs[,2] - lasso.lambda.errs[,3], type = "l", col = "red")
+
+lasso.min.index = which.min(lasso.lambda.errs[,2])
+lasso.lmin = lasso.lambda.errs[lasso.min.index,1]
+
+lasso.1se.index = which.max(lasso.lambda.errs[,2] <= (lasso.lambda.errs[lasso.min.index,2] +
+                                                     lasso.lambda.errs[lasso.min.index,3]))
+lasso.l1se = lasso.lambda.errs[lasso.1se.index,1]
+
+# min
+abline(v = log(lasso.lmin), lty = 2, col = "blue", lwd = 2)
+
+# 1.se min
+abline(v = log(lasso.l1se),
+       lty = 2, col = "purple", lwd = 2)
+
+
+legend("topleft",
+       legend = c("lambda min", "lambda 1se", "se"),
+       col = c("blue", "purple", "red"),
+       lwd = c(2, 2, 1),
+       lty = c(2, 2, 1))
 ```
+Best $lambda$ is close to zero, so the best solution seems OLS classical solution.
+
+Check beta: proportion of non zero beta among all betas
+```{r}
+lasso.beta.best = all.fit$beta[,which.min(lasso.lambda.errs[,2])]
+length(which(lasso.beta.best != 0)) / length(lasso.beta.best)
+```
+So the solution is not sparse even thought many coefficients are close to zero.
+
+While for the l1se
+```{r}
+lasso.beta.1se = all.fit$beta[,lasso.1se.index]
+length(which(lasso.beta.1se != 0)) / length(lasso.beta.best)
+```
+Still not sparse.
+
+```{r}
+lasso.beta.best %>% sort() %>% plot(main = "Lasso lambda best coefficients",
+                                    xlab = "beta index",
+                                    ylab = "beta value")
+abline(h = 0, col = "red", lty = 2)
+```
+
 
 
 
 ### Elasticnet
 
+Selecting a grid of 20 $\alpha \in (0,1)$.
+```{r}
+alpha.vals = seq(1e-5, 1 - 1e-5, length = 20)
+
+
+```
+
+
 ### Grouped LASSO
 
 ### Scad MCP
+
+### Discrete response models
+
+In reality the counts are discrete so it seems reasonable to also try discrete response models such as Poisson, Negative Binomial and zero inflated Poisson.
+For all such cases, using the counts as response an offset has to be imposed: in analogy from what has been done assuming the continuous response the offset will be the product of the NTA Population by the number of months considered (in log scale using the canonincal log link for a Poisson GLM)
+
+### Poisson LASSO
+
+
+```{r}
+# log(Pop1) is the offset
+FORMULA.POI.NO.KY_CD = as.formula("count ~. -1 -Pop1 - y + 
+                            NTA2020:LAW_CAT_CD +
+                            NTA2020:AGE_GROUP +
+                            NTA2020:PERP_SEX +
+                            NTA2020:PERP_RACE")
+
+Pop1.col.index = which(colnames(month.fit.val.k4.sets[[1]]$train$model_matrix) == "Pop1")
+```
+
+
+```{r}
+lambda.vals.poi = exp(seq(-20, -6, 0.1))
+
+all.fit = glmnet(x = sparse.model.matrix(FORMULA.POI.NO.KY_CD,
+                                         data = my.df.year.grouped),
+                 y = my.df.year.grouped$count,
+                 family = "poisson",
+                 offset = log(my.df.year.grouped$Pop1),
+                 alpha = 1)
+
+# validation error matrix
+# each col
+lasso.cv.error.matr = matrix(NA,
+                             nrow = length(lambda.vals),
+                             ncol = nrow(month_sets_ind$k4))
+
+
+for (i in 1:dim(lasso.cv.error.matr)[2]){
+  temp.lasso = glmnet(x = month.fit.val.k4.sets[[i]]$train$model_matrix,
+                 y = month.fit.val.k4.sets[[i]]$train$y,
+                 family = "poisson",
+                 offset = log(month.fit.val.k4.sets[[i]]$train$model_matrix),
+                 alpha = 1,
+                 lambda = lambda.vals)
+  
+  pred.lasso = predict.glmnet(temp.lasso,
+                              newx = month.fit.val.k4.sets[[i]]$test$model_matrix)
+  
+  lasso.cv.error.matr[,i] = apply(pred.lasso,
+                                  2,
+                                  function(col) RMSEfun(true_vals = exp(month.fit.val.k4.sets[[i]]$test$y),
+                                                        pred_vals = exp(col)))
+  
+  rm(temp.lasso)
+  rm(pred.lasso)
+  gc()
+  
+}
+```
+
+
+### Poisson Elasticnet
+```{r}
+
+```
+
+
+### Negative Binomial Lasso
+```{r}
+library(mpath)
+?mpath::zipath_fit()
+```
+
+
+### Zero Inflated Lasso
 
 
 
