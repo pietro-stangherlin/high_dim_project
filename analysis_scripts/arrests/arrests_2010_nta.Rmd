@@ -8,12 +8,12 @@ knitr::opts_chunk$set(echo = FALSE)
 knitr::opts_chunk$set(fig.align = 'center')
 ```
 
-```{r, message=FALSE}
-library(tidyverse)
-library(Matrix)
-
+```{r, message=FALSE, warning=FALSE}
 rm(list = ls())
 gc()
+
+library(tidyverse)
+library(Matrix)
 ```
 ## Preprocessing
 ```{r}
@@ -160,8 +160,6 @@ GroupByMONTHSets = function(mydf, month_indexes){
   month_grouped$y = month_grouped$count /
     (month_grouped$Pop1 * length(month_indexes))
   
-  month_grouped$count = NULL
-  
   return(month_grouped)
 }
 ```
@@ -186,33 +184,71 @@ month_sets_ind = list(k4 = matrix(c(1, 5, 9,
                                   nrow = 6))
 ```
 
-Model matrix
+In order to simplify computations we remove the KY_CD variable (hoping LAW_CAT_CD will be sufficient to describe the crime tipe)
+
 ```{r}
+my.df$KY_CD = NULL
 
-df1 = GroupByMONTHSets(mydf = my.df,
-                       month_indexes = month_sets_ind$k4[1,])
-df2 = GroupByMONTHSets(mydf = my.df,
-                       month_indexes = setdiff(1:12, month_sets_ind$k4[1,]))
+my.df.year.grouped = my.df %>%
+  select(-MONTH) %>% 
+  group_by_all() %>% 
+  summarise(count = n())
 
-mm1 = sparse.model.matrix(rep(1, nrow(df1)) ~. -1 + 
-                            NTA2020:LAW_CAT_CD +
-                            NTA2020:AGE_GROUP +
-                            NTA2020:PERP_SEX +
-                            NTA2020:PERP_RACE + 
-                            NTA2020:KY_CD,
-                          data = df1)
-
-mm2 = sparse.model.matrix(rep(1, nrow(df2)) ~. -1 +
-                            NTA2020:LAW_CAT_CD +
-                            NTA2020:AGE_GROUP +
-                            NTA2020:PERP_SEX +
-                            NTA2020:PERP_RACE +
-                            NTA2020:KY_CD,
-                          data = df2)
+my.df.year.grouped$y = my.df.year.grouped$count / my.df.year.grouped$Pop1
 ```
 
 
+```{r}
+FORMULA.NO.KY_CD = as.formula("y ~. -1 -Pop1 - count + 
+                            NTA2020:LAW_CAT_CD +
+                            NTA2020:AGE_GROUP +
+                            NTA2020:PERP_SEX +
+                            NTA2020:PERP_RACE")
+```
+
+Error functions
+```{r}
+RMSEfun = function(true_vals, pred_vals){
+  sqrt(sum( (true_vals - pred_vals)^2 ))
+}
+```
+
+
+
+Model matrices: omit KY_CD variables due to computational issues.
+Make a list of fit and validation sets:
+
+```{r, warning=FALSE, message=FALSE}
+
+month.fit.val.k4.sets = list()
+
+for (i in 1:nrow(month_sets_ind$k4)){
+  
+  temp.df.train = GroupByMONTHSets(mydf = my.df,
+                       month_indexes = setdiff(1:12, month_sets_ind$k4[i,]))
+  
+  temp.df.test = GroupByMONTHSets(mydf = my.df,
+                       month_indexes = month_sets_ind$k4[i,])
+  
+  # make sublists
+  month.fit.val.k4.sets[[i]] = list(train = list(y = NA,model_matrix = NA),
+                                    test = list(y = NA,model_matrix = NA))
+  
+  # populate the sublists
+  month.fit.val.k4.sets[[i]]$train$y = temp.df.train$y
+  month.fit.val.k4.sets[[i]]$train$model_matrix = sparse.model.matrix(FORMULA.NO.KY_CD,
+                          data = temp.df.train)
+  
+  month.fit.val.k4.sets[[i]]$test$y = temp.df.test$y
+  month.fit.val.k4.sets[[i]]$test$model_matrix = sparse.model.matrix(FORMULA.NO.KY_CD,
+                          data = temp.df.test)
+  gc()
+}
+
+```
+
 ### Note on quantitative covariates
+
 The simplest assumption is to assume a linear (monotone) trend of the response as a function of quantitative covariates.
 
 ### LASSO
@@ -220,11 +256,55 @@ The simplest assumption is to assume a linear (monotone) trend of the response a
 ```{r}
 library(glmnet)
 
-# first compute a lambda grid on all the grouped dataset
+# first compute a lambda grid on all grouped dataset
+
+all.fit = glmnet(x = sparse.model.matrix(FORMULA.NO.KY_CD, data = my.df.year.grouped),
+                 y = my.df.year.grouped$y,
+                 alpha = 1)
+
+# validation error matrix
+# each col
+lasso.cv.error.matr = matrix(NA,
+                             nrow = length(all.fit$lambda),
+                             ncol = nrow(month_sets_ind$k4))
 
 
+for (i in 1:dim(lasso.cv.error.matr)[2]){
+  temp.lasso = glmnet(x = month.fit.val.k4.sets[[i]]$train$model_matrix,
+                 y = month.fit.val.k4.sets[[i]]$train$y,
+                 alpha = 1,
+                 lambda = all.fit$lambda)
+  
+  pred.lasso = predict.glmnet(temp.lasso,
+                              newx = month.fit.val.k4.sets[[i]]$test$model_matrix)
+  
+  lasso.cv.error.matr[,i] = apply(pred.lasso,
+                                  2,
+                                  function(col) RMSEfun(true_vals = month.fit.val.k4.sets[[i]]$test$y,
+                                                        pred_vals = col))
+  
+  rm(temp.lasso)
+  rm(pred.lasso)
+  gc()
+  
+}
 
 ```
+
+```{r}
+
+plot(log(all.fit$lambda), apply(lasso.cv.error.matr, 1, mean),
+     xlab = "log lambda",
+     ylab = "RMSE",
+     main = "LASSO CV error",
+     xlim = c(-13, -10),
+     ylim = c(0.23, 0.25),
+     pch = 16,
+     type = "b")
+```
+
+
+
 ### Elasticnet
 
 ### Grouped LASSO
