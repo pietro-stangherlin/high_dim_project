@@ -283,35 +283,30 @@ Make a list of fit and validation sets:
 
 ```{r, warning=FALSE, message=FALSE}
 
+library(dplyr)
+library(Matrix)
+
 month.fit.val.k4.sets = list()
 
 for (i in 1:nrow(month_sets_ind$k4)){
-  
-  temp.df.train = GroupByMONTHSets(mydf = my.df,
-                       month_indexes = setdiff(1:12, month_sets_ind$k4[i,]))
-  
-  temp.df.test = GroupByMONTHSets(mydf = my.df,
-                       month_indexes = month_sets_ind$k4[i,])
-  
   # make sublists
   month.fit.val.k4.sets[[i]] = list(train = list(y = NA,model_matrix = NA),
                                     test = list(y = NA,model_matrix = NA))
   
   # populate the sublists
   # keep also the all df
-  month.fit.val.k4.sets[[i]]$train$df = temp.df.train
-  month.fit.val.k4.sets[[i]]$train$y = temp.df.train$y
-  month.fit.val.k4.sets[[i]]$train$count = temp.df.train$count
-  month.fit.val.k4.sets[[i]]$train$Pop1 = temp.df.train$Pop1
-  month.fit.val.k4.sets[[i]]$train$model_matrix = sparse.model.matrix(FORMULA.NO.KY_CD.matrix,
-                          data = temp.df.train)
+  month.fit.val.k4.sets[[i]]$train$df = GroupByMONTHSets(mydf = my.df,
+                       month_indexes = setdiff(1:12, month_sets_ind$k4[i,]))
   
-  month.fit.val.k4.sets[[i]]$test$df = temp.df.test
-  month.fit.val.k4.sets[[i]]$test$y = temp.df.test$y
-  month.fit.val.k4.sets[[i]]$test$count = temp.df.test$count
-  month.fit.val.k4.sets[[i]]$test$Pop1 = temp.df.test$Pop1
+  month.fit.val.k4.sets[[i]]$train$model_matrix = sparse.model.matrix(FORMULA.NO.KY_CD.matrix,
+                          data = month.fit.val.k4.sets[[i]]$train$df)
+  
+  
+  month.fit.val.k4.sets[[i]]$test$df = GroupByMONTHSets(mydf = my.df,
+                       month_indexes = month_sets_ind$k4[i,])
+  
   month.fit.val.k4.sets[[i]]$test$model_matrix = sparse.model.matrix(FORMULA.NO.KY_CD.matrix,
-                          data = temp.df.test)
+                          data = month.fit.val.k4.sets[[i]]$test$df)
   gc()
 }
 
@@ -321,6 +316,14 @@ for (i in 1:nrow(month_sets_ind$k4)){
 
 The simplest assumption is to assume a linear (monotone) trend of the response as a function of quantitative covariates.
 
+
+```{r}
+# store each model useful information:
+# validation error and beta for best lambda
+models_summary = list()
+```
+
+
 ### LASSO
 
 ```{r}
@@ -328,33 +331,26 @@ library(glmnet)
 
 # first compute a lambda grid on all grouped dataset
 
-lambda.vals = exp(seq(-20, -6, 0.1))
+models_summary$lasso = list()
+models_summary$lasso$lambda_vals = exp(seq(-13, -8, 0.1)) %>% sort(decreasing = T)
 
-all.fit = glmnet(x = sparse.model.matrix(FORMULA.NO.KY_CD,
-                                         data = my.df.year.grouped),
-                 y = my.df.year.grouped$y,
-                 alpha = 1,
-                 lambda = lambda.vals)
-
-# validation error matrix
-# each col
-lasso.cv.error.matr = matrix(NA,
-                             nrow = length(lambda.vals),
-                             ncol = nrow(month_sets_ind$k4))
+temp.err.matr = matrix(NA, 
+                      nrow = length(lambda.vals),
+                      ncol = nrow(month_sets_ind$k4))
 
 
-for (i in 1:dim(lasso.cv.error.matr)[2]){
+for (i in 1:dim(temp.err.matr)[2]){
   temp.lasso = glmnet(x = month.fit.val.k4.sets[[i]]$train$model_matrix,
-                 y = month.fit.val.k4.sets[[i]]$train$y,
+                 y = month.fit.val.k4.sets[[i]]$train$df$y,
                  alpha = 1,
-                 lambda = lambda.vals)
+                 lambda = models_summary$lasso$lambda_vals)
   
   pred.lasso = predict.glmnet(temp.lasso,
                               newx = month.fit.val.k4.sets[[i]]$test$model_matrix)
   
-  lasso.cv.error.matr[,i] = apply(pred.lasso,
+  temp.err.matr[,i] = apply(pred.lasso,
                                   2,
-                                  function(col) RMSEfun(true_vals = exp(month.fit.val.k4.sets[[i]]$test$y),
+                                  function(col) RMSEfun(true_vals = exp(month.fit.val.k4.sets[[i]]$test$df$y),
                                                         pred_vals = exp(col)))
   
   rm(temp.lasso)
@@ -363,17 +359,18 @@ for (i in 1:dim(lasso.cv.error.matr)[2]){
   
 }
 
-```
+models_summary$lasso$cv.err.matr = cbind(models_summary$lasso$lambda_vals,
+                          apply(temp.err.matr,1,mean),
+                          apply(temp.err.matr,1,sd)/ncol(temp.err.matr))
 
+```
 
 
 ```{r}
-# find cv error average and s.e
-lasso.lambda.errs = cbind(lambda.vals %>% sort(decreasing = T),
-                          apply(lasso.cv.error.matr,1,mean),
-                          apply(lasso.cv.error.matr,1,sd)/ncol(lasso.cv.error.matr))
-
+# general purpouse plots function
+# assuming the parameter is one-dimensional
 ```
+
 
 
 ```{r}
@@ -462,30 +459,19 @@ For all such cases, using the counts as response an offset has to be imposed: in
 ```
 
 
-
-```{r}
-# log(Pop1) is the offset
-FORMULA.POI.NO.KY_CD = as.formula("count ~. -1 -Pop1 - y + 
-                            NTA2020:LAW_CAT_CD +
-                            NTA2020:AGE_GROUP +
-                            NTA2020:PERP_SEX +
-                            NTA2020:PERP_RACE")
-
-Pop1.col.index = which(colnames(month.fit.val.k4.sets[[1]]$train$model_matrix) == "Pop1")
-```
-
-
 ```{r}
 # WARNING: to fix model matrix
+glmnet.control(mxitnr = 50) # increase maximum no. of IRLS iterations allowed
+# all.fit.poi = glmnet(x = sparse.model.matrix(FORMULA.POI.NO.KY_CD,
+#                                          data = my.df.year.grouped),
+#                  y = my.df.year.grouped$count,
+#                  family = poisson(),
+#                  offset = log(my.df.year.grouped$Pop1 * 12), # 12 months
+#                  alpha = 1,
+#                  intercept = TRUE,
+#                  standardize = TRUE)
 
-all.fit.poi = glmnet(x = sparse.model.matrix(FORMULA.POI.NO.KY_CD,
-                                         data = my.df.year.grouped),
-                 y = my.df.year.grouped$count,
-                 family = poisson(),
-                 offset = log(my.df.year.grouped$Pop1 * 12), # 12 months
-                 alpha = 1)
-
-lambda.vals.poi = all.fit.poi$lambda # convergence issues for 36th lambda
+lambda.vals.poi = exp(seq(-10, 5, 0.1))
 
 # validation error matrix
 # each col
@@ -498,17 +484,18 @@ n_months_test = 12 - n_months_train
 
 for (i in 1:dim(lasso.cv.error.matr)[2]){
   temp.lasso = glmnet(x = month.fit.val.k4.sets[[i]]$train$model_matrix,
-                 y = month.fit.val.k4.sets[[i]]$train$count,
+                 y = month.fit.val.k4.sets[[i]]$train$df$count,
                  family = poisson(),
-                 offset = log(month.fit.val.k4.sets[[i]]$train$Pop1) + 
+                 offset = log(month.fit.val.k4.sets[[i]]$train$df$Pop1) + 
                                 log(n_months_train),
                  alpha = 1,
                  lambda = lambda.vals.poi,
-                 maxit = 100000)
+                 intercept = TRUE,
+                 standardize = TRUE)
   
   pred.lasso = predict.glmnet(temp.lasso,
                               newx = month.fit.val.k4.sets[[i]]$test$model_matrix,
-                              newoffset = log(month.fit.val.k4.sets[[i]]$test$Pop1) + 
+                              newoffset = log(month.fit.val.k4.sets[[i]]$test$df$Pop1) + 
                                 log(n_months_test),
                               type = "response") #predict the mean -> check
   
@@ -516,7 +503,7 @@ for (i in 1:dim(lasso.cv.error.matr)[2]){
   lasso.cv.error.matr[,i] = apply(pred.lasso,
                                   2,
                                   function(col) RMSEfun(true_vals =
-                                                        month.fit.val.k4.sets[[i]]$test$count,
+                                                        month.fit.val.k4.sets[[i]]$test$df$count,
                                                         pred_vals = col))
   
   rm(temp.lasso)
@@ -576,19 +563,25 @@ month.fit.val.k4.sets[[i]]$test$count %>% length()
 
 
 ### Neg bin Lasso
+
+Using a hierarchical specification we assume $Y_i \sim P(\mu_i \lambda_i)$ and $\lambda_i \sim Ga(\tau, \tau)$ so marginally the $Y_i$ are negative binomials with variance $\mu_i(1 + \tau \mu_i)$.
+In the R parameterization adopted $\theta = 1/\tau$ which becomes another tuning parameter.
+
 ```{r, message=FALSE, warning=FALSE}
 library(MASS)
 ```
 
 ```{r}
 # WARNING: to fix model matrix
-
-all.fit.quasi.poi = glmnet(x = sparse.model.matrix(FORMULA.POI.NO.KY_CD,
-                                         data = my.df.year.grouped),
-                 y = my.df.year.grouped$count,
-                 family = negative.binomial(theta = 5), # another reg param.
-                 offset = log(my.df.year.grouped$Pop1 * 12), # 12 months
-                 alpha = 1)
+glmnet.control(mxitnr = 50) # increase maximum no. of IRLS iterations allowed
+# all.fit.quasi.poi = glmnet(x = sparse.model.matrix(FORMULA.POI.NO.KY_CD,
+#                                          data = my.df.year.grouped),
+#                  y = my.df.year.grouped$count,
+#                  family = negative.binomial(theta = 5), # another reg param.
+#                  offset = log(my.df.year.grouped$Pop1 * 12), # 12 months
+#                  alpha = 1,
+#                  intercept = TRUE,
+#                  standardize = TRUE)
 
 lambda.vals.poi = all.fit.poi$lambda[1:35] # convergence issues for 36th lambda
 
@@ -609,7 +602,8 @@ for (i in 1:dim(lasso.cv.error.matr)[2]){
                                 log(n_months_train),
                  alpha = 1,
                  lambda = lambda.vals.poi,
-                 maxit = 100000)
+                 intercept = TRUE,
+                 standardize = TRUE)
   
   pred.lasso = predict.glmnet(temp.lasso,
                               newx = month.fit.val.k4.sets[[i]]$test$model_matrix,
@@ -630,6 +624,8 @@ for (i in 1:dim(lasso.cv.error.matr)[2]){
   
 }
 ```
+
+
 ```{r}
 plot(log(lasso.lambda.errs[,1]), lasso.lambda.errs[,2],
      xlab = "log lambda",
