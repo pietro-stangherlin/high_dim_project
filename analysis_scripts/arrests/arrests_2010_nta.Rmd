@@ -298,12 +298,15 @@ for (i in 1:nrow(month_sets_ind$k4)){
                                     test = list(y = NA,model_matrix = NA))
   
   # populate the sublists
+  # keep also the all df
+  month.fit.val.k4.sets[[i]]$train$df = temp.df.train
   month.fit.val.k4.sets[[i]]$train$y = temp.df.train$y
   month.fit.val.k4.sets[[i]]$train$count = temp.df.train$count
   month.fit.val.k4.sets[[i]]$train$Pop1 = temp.df.train$Pop1
   month.fit.val.k4.sets[[i]]$train$model_matrix = sparse.model.matrix(FORMULA.NO.KY_CD.matrix,
                           data = temp.df.train)
   
+  month.fit.val.k4.sets[[i]]$test$df = temp.df.test
   month.fit.val.k4.sets[[i]]$test$y = temp.df.test$y
   month.fit.val.k4.sets[[i]]$test$count = temp.df.test$count
   month.fit.val.k4.sets[[i]]$test$Pop1 = temp.df.test$Pop1
@@ -454,6 +457,11 @@ For all such cases, using the counts as response an offset has to be imposed: in
 
 ### Poisson LASSO
 
+```{r}
+# Known convergence difficult, see help here. https://cran.r-project.org/web/packages/glmnet/vignettes/glmnetFamily.pdf
+```
+
+
 
 ```{r}
 # log(Pop1) is the offset
@@ -473,11 +481,11 @@ Pop1.col.index = which(colnames(month.fit.val.k4.sets[[1]]$train$model_matrix) =
 all.fit.poi = glmnet(x = sparse.model.matrix(FORMULA.POI.NO.KY_CD,
                                          data = my.df.year.grouped),
                  y = my.df.year.grouped$count,
-                 family = "poisson",
+                 family = poisson(),
                  offset = log(my.df.year.grouped$Pop1 * 12), # 12 months
                  alpha = 1)
 
-lambda.vals.poi = all.fit.poi$lambda[1:35] # convergence issues for 36th lambda
+lambda.vals.poi = all.fit.poi$lambda # convergence issues for 36th lambda
 
 # validation error matrix
 # each col
@@ -491,7 +499,7 @@ n_months_test = 12 - n_months_train
 for (i in 1:dim(lasso.cv.error.matr)[2]){
   temp.lasso = glmnet(x = month.fit.val.k4.sets[[i]]$train$model_matrix,
                  y = month.fit.val.k4.sets[[i]]$train$count,
-                 family = "poisson",
+                 family = poisson(),
                  offset = log(month.fit.val.k4.sets[[i]]$train$Pop1) + 
                                 log(n_months_train),
                  alpha = 1,
@@ -559,6 +567,7 @@ legend("topleft",
        lwd = c(2, 2, 1),
        lty = c(2, 2, 1))
 ```
+There's a problem here since for smaller $\lambda$ values the algorithm does not converge.
 
 ### Poisson Elasticnet
 ```{r}
@@ -566,14 +575,95 @@ month.fit.val.k4.sets[[i]]$test$count %>% length()
 ```
 
 
-### Negative Binomial Lasso
-```{r}
-library(mpath)
-?mpath::zipath_fit()
+### Neg bin Lasso
+```{r, message=FALSE, warning=FALSE}
+library(MASS)
 ```
 
+```{r}
+# WARNING: to fix model matrix
 
-### Zero Inflated Lasso
+all.fit.quasi.poi = glmnet(x = sparse.model.matrix(FORMULA.POI.NO.KY_CD,
+                                         data = my.df.year.grouped),
+                 y = my.df.year.grouped$count,
+                 family = negative.binomial(theta = 5), # another reg param.
+                 offset = log(my.df.year.grouped$Pop1 * 12), # 12 months
+                 alpha = 1)
+
+lambda.vals.poi = all.fit.poi$lambda[1:35] # convergence issues for 36th lambda
+
+# validation error matrix
+# each col
+lasso.cv.error.matr = matrix(NA,
+                             nrow = length(lambda.vals.poi),
+                             ncol = nrow(month_sets_ind$k4))
+
+n_months_train = ncol(month_sets_ind$k4)
+n_months_test = 12 - n_months_train
+
+for (i in 1:dim(lasso.cv.error.matr)[2]){
+  temp.lasso = glmnet(x = month.fit.val.k4.sets[[i]]$train$model_matrix,
+                 y = month.fit.val.k4.sets[[i]]$train$count,
+                 family = negative.binomial(theta = 5),
+                 offset = log(month.fit.val.k4.sets[[i]]$train$Pop1) + 
+                                log(n_months_train),
+                 alpha = 1,
+                 lambda = lambda.vals.poi,
+                 maxit = 100000)
+  
+  pred.lasso = predict.glmnet(temp.lasso,
+                              newx = month.fit.val.k4.sets[[i]]$test$model_matrix,
+                              newoffset = log(month.fit.val.k4.sets[[i]]$test$Pop1) + 
+                                log(n_months_test),
+                              type = "response") #predict the mean -> check
+  
+  # to check offset
+  lasso.cv.error.matr[,i] = apply(pred.lasso,
+                                  2,
+                                  function(col) RMSEfun(true_vals =
+                                                        month.fit.val.k4.sets[[i]]$test$count,
+                                                        pred_vals = col))
+  
+  rm(temp.lasso)
+  rm(pred.lasso)
+  gc()
+  
+}
+```
+```{r}
+plot(log(lasso.lambda.errs[,1]), lasso.lambda.errs[,2],
+     xlab = "log lambda",
+     ylab = "RMSE",
+     main = "LASSO Neg Bin CV error",
+     pch = 16,
+     type = "b")
+
+points(log(lasso.lambda.errs[,1]),
+       lasso.lambda.errs[,2] + lasso.lambda.errs[,3], type = "l", col = "red")
+points(log(lasso.lambda.errs[,1]), lasso.lambda.errs[,2] - lasso.lambda.errs[,3], type = "l", col = "red")
+
+lasso.min.index = which.min(lasso.lambda.errs[,2])
+lasso.lmin = lasso.lambda.errs[lasso.min.index,1]
+
+lasso.1se.index = which.max(lasso.lambda.errs[,2] <= (lasso.lambda.errs[lasso.min.index,2] +
+                                                     lasso.lambda.errs[lasso.min.index,3]))
+lasso.l1se = lasso.lambda.errs[lasso.1se.index,1]
+
+# min
+abline(v = log(lasso.lmin), lty = 2, col = "blue", lwd = 2)
+
+# 1.se min
+abline(v = log(lasso.l1se),
+       lty = 2, col = "purple", lwd = 2)
+
+
+legend("topleft",
+       legend = c("lambda min", "lambda 1se", "se"),
+       col = c("blue", "purple", "red"),
+       lwd = c(2, 2, 1),
+       lty = c(2, 2, 1))
+```
+
 
 
 
