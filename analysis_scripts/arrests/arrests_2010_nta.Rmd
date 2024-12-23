@@ -15,6 +15,26 @@ gc()
 library(tidyverse)
 library(Matrix)
 ```
+
+```{r}
+# Condition: if TRUE execute the computational heavy chuncks, else not
+# assuming the models are been loaded from a RData file before.
+# IMPORTANT: in order to reproduce the result set bool_execute_heavy_chunks = TRUE
+
+bool_execute_heavy_chunks = FALSE
+
+# require loading models_summary list
+if(!bool_execute_heavy_chunks){
+  load("arrests_nta_2010_models_summary.Rdata")
+}
+
+else{
+  # store each model useful information:
+  # validation error and beta for best lambda
+  models_summary = list()
+}
+```
+
 ## Preprocessing
 ```{r}
 # read the data
@@ -233,7 +253,7 @@ month_sets_ind = list(k4 = matrix(c(1, 5, 9,
 In order to simplify computations we remove the KY_CD variable (hoping LAW_CAT_CD will be sufficient to describe the crime type)
 when using a linear model (assuming gaussian errors) we consider the response as: 
 $y = \log(\text{count} / \text{population})$ where each count is the events count obtained by grouping by all other covariates and each population is specific to each NTA.
-```{r}
+```{r, warning=FALSE}
 my.df$KY_CD = NULL
 
 my.df.year.grouped = my.df %>%
@@ -241,8 +261,15 @@ my.df.year.grouped = my.df %>%
   group_by_all() %>% 
   summarise(count = n())
 
+
 # take the log to 
 my.df.year.grouped$y = log(my.df.year.grouped$count / my.df.year.grouped$Pop1)
+```
+
+
+```{r}
+my.df.year.grouped.matrix = sparse.model.matrix(FORMULA.NO.KY_CD.matrix,
+                                                my.df.year.grouped)
 ```
 
 
@@ -316,23 +343,21 @@ for (i in 1:nrow(month_sets_ind$k4)){
 
 The simplest assumption is to assume a linear (monotone) trend of the response as a function of quantitative covariates.
 
-
-```{r}
-# store each model useful information:
-# validation error and beta for best lambda
-models_summary = list()
-```
-
-
 ### LASSO
 
 ```{r}
 library(glmnet)
 
+
+
 # first compute a lambda grid on all grouped dataset
 
+lasso.fit.all = glmnet(x = my.df.year.grouped.matrix,
+                 y = my.df.year.grouped$y,
+                 alpha = 1)
+
 models_summary$lasso = list()
-models_summary$lasso$lambda_vals = exp(seq(-13, -8, 0.1)) %>% sort(decreasing = T)
+models_summary$lasso$lambda_vals = exp(seq(-13, -6, 0.1)) %>% sort(decreasing = T)
 
 temp.err.matr = matrix(NA, 
                       nrow = length(models_summary$lasso$lambda_vals),
@@ -347,7 +372,6 @@ for (i in 1:dim(temp.err.matr)[2]){
   
   pred.fit = predict.glmnet(temp.fit,
                               newx = month.fit.val.k4.sets[[i]]$test$model_matrix)
-  print(dim(pred.fit))
   
   temp.err.matr[,i] = apply(pred.fit, 2,
                                   function(col) RMSEfun(true_vals = exp(month.fit.val.k4.sets[[i]]$test$df$y),
@@ -431,10 +455,20 @@ PlotOneDim(x = log(models_summary$lasso$cv.err.matr$lambda),
 ```
 Best $lambda$ is close to zero, so the best solution seems OLS classical solution.
 
+Check coefficients paths
+
+```{r}
+plot(lasso.fit.all, xvar = "lambda", main = "LASSO beta path")
+abline(v = log(models_summary$lasso$lmin), col = "blue", lty = 2, lwd = 2)
+abline(v = log(models_summary$lasso$l1se), col = "purple", lty = 2, lwd = 2)
+```
+
+
+
 ### Elasticnet
 
 Selecting a grid of 20 $\alpha \in (0,1)$.
-```{r}
+```{r, eval = bool_execute_heavy_chunks}
 models_summary$elasticnet = list()
 
 models_summary$elasticnet$lambda_vals =  exp(seq(-13, -8, 0.1)) # glmnet sorts by decreasing order
@@ -496,7 +530,6 @@ models_summary$elasticnet$amin = models_summary$elasticnet$alpha_vals[models_sum
 filled.contour(x = log(models_summary$elasticnet$lambda_vals),
                y = models_summary$elasticnet$alpha_vals,
                z = models_summary$elasticnet$cv.err.matrix,
-               zlim = c(0.002, 0.003),
                main = "Elasticnet Cv error contour",
                xlab = "log lambda",
                ylab = "alpha",
@@ -508,7 +541,7 @@ points(log(models_summary$elasticnet$lmin),
       col = "white", pch = 16)
 
 abline(v = log(models_summary$elasticnet$lmin), col = "white", lty = 2)
-abline(h = log(models_summary$elasticnet$amin), col = "white", lty = 2)
+abline(h = models_summary$elasticnet$amin, col = "white", lty = 2)
 
 legend("topleft",
        legend = c("min err"),
@@ -518,9 +551,219 @@ legend("topleft",
        bty = "n")
 ```
 
-The best selected model is close to a ridge regression.
+The best selected model is close to a ridge regression since $\alpha$ is close to zero.
 
-### Scad MCP
+
+### Scad
+
+```{r, warning = FALSE, eval = bool_execute_heavy_chunks}
+library(ncvreg)
+
+models_summary$scad = list()
+
+models_summary$scad$lambda_vals =  exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE)
+models_summary$scad$gamma_vals = seq(2+1e-05, 20, length = 20)
+
+# make cv error matrix
+temp.err.array = array(NA,
+                       dim = c(length(models_summary$scad$lambda_vals),
+                               length(models_summary$scad$gamma_vals),
+                               nrow(month_sets_ind$k4)))
+
+# cycle over cv sets
+for (k in 1:dim(temp.err.array)[3]){
+  
+  # iterate over alpha
+for(j in 1:dim(temp.err.array)[2]){
+  
+  # ncvreg doens't accept sparse matrices
+  temp.fit = ncvreg(X = as.matrix(month.fit.val.k4.sets[[k]]$train$model_matrix),
+                 y = month.fit.val.k4.sets[[k]]$train$df$y,
+                 gamma = models_summary$scad$gamma_vals[j],
+                 lambda = models_summary$scad$lambda_vals %>% sort(decreasing = T),
+                 penalty = "SCAD") # all lambda path
+  
+  pred.fit = predict(temp.fit,
+                     X = as.matrix(month.fit.val.k4.sets[[k]]$test$model_matrix))
+  
+  
+  temp.err.array[,j,k] = apply(pred.fit, 2,
+                                  function(col) RMSEfun(true_vals = exp(month.fit.val.k4.sets[[k]]$test$df$y),
+                                                        pred_vals = exp(col)))
+  
+  rm(temp.fit)
+  rm(pred.fit)
+  gc()
+  
+  }
+  
+}
+
+# average error over all cv folds
+models_summary$scad$cv.err.matrix = apply(temp.err.array, c(1,2), mean)
+
+# due to plotting reasons: invert the rows order
+# so that the lambdas are in increasing order
+models_summary$scad$cv.err.matrix = models_summary$scad$cv.err.matrix[rev(seq_len(nrow(models_summary$scad$cv.err.matrix))), ]
+
+models_summary$scad$cv.err.min = min(models_summary$scad$cv.err.matrix)
+
+models_summary$scad$err.min.indexes.lambda.gamma = which(models_summary$scad$cv.err.matrix ==
+        models_summary$scad$cv.err.min,
+      arr.ind = TRUE)
+
+models_summary$scad$lmin = models_summary$scad$lambda_vals[models_summary$scad$err.min.indexes.lambda.gamma[1]]
+
+models_summary$scad$gmin = models_summary$scad$gamma_vals[models_summary$scad$err.min.indexes.lambda.gamma[2]]
+
+```
+
+```{r}
+filled.contour(x = log(models_summary$scad$lambda_vals),
+               y = models_summary$scad$gamma_vals,
+               z = models_summary$scad$cv.err.matrix,
+               main = "SCAD Cv error contour",
+               xlab = "log lambda",
+               ylab = "gamma",
+               color.palette = viridis::viridis,
+               nlevels = 200)
+
+points(log(models_summary$scad$lmin),
+      models_summary$scad$gmin,
+      col = "white", pch = 16)
+
+abline(v = log(models_summary$scad$lmin), col = "white", lty = 2)
+abline(h = models_summary$scad$gmin, col = "white", lty = 2)
+
+legend("topleft",
+       legend = c("min err"),
+       col = "white",
+       text.col = "white",
+       lty = 2,
+       bty = "n")
+```
+Check if the estimate is in the non convex region.
+
+```{r,  warning=FALSE}
+scad.fit.all = ncvreg(X = as.matrix(my.df.year.grouped.matrix),
+                 y = my.df.year.grouped$y,
+                 gamma = models_summary$scad$gmin,
+                 lambda = models_summary$scad$lambda_vals %>% sort(decreasing = T),
+                 penalty = "SCAD")
+
+plot(scad.fit.all, log.l = TRUE)
+abline(v = log(models_summary$scad$lmin), col = "blue", lty = 2, lwd = 2)
+
+```
+
+
+### MCP
+
+```{r, warning = FALSE, eval = bool_execute_heavy_chunks}
+library(ncvreg)
+
+models_summary$mcp = list()
+
+models_summary$mcp$lambda_vals =  exp(seq(-20, 5, 0.5)) %>% sort(decreasing = TRUE)
+models_summary$mcp$gamma_vals = seq(1+1e-05, 20, length = 20)
+
+# make cv error matrix
+temp.err.array = array(NA,
+                       dim = c(length(models_summary$mcp$lambda_vals),
+                               length(models_summary$mcp$gamma_vals),
+                               nrow(month_sets_ind$k4)))
+
+# cycle over cv sets
+for (k in 1:dim(temp.err.array)[3]){
+  
+  # iterate over alpha
+for(j in 1:dim(temp.err.array)[2]){
+  
+  # ncvreg doens't accept sparse matrices
+  temp.fit = ncvreg(X = as.matrix(month.fit.val.k4.sets[[k]]$train$model_matrix),
+                 y = month.fit.val.k4.sets[[k]]$train$df$y,
+                 gamma = models_summary$mcp$gamma_vals[j],
+                 lambda = models_summary$mcp$lambda_vals,
+                 penalty = "MCP") # all lambda path
+  
+  pred.fit = predict(temp.fit,
+                     X = as.matrix(month.fit.val.k4.sets[[k]]$test$model_matrix))
+  
+  
+  temp.err.array[,j,k] = apply(pred.fit, 2,
+                                  function(col) RMSEfun(true_vals = exp(month.fit.val.k4.sets[[k]]$test$df$y),
+                                                        pred_vals = exp(col)))
+  
+  rm(temp.fit)
+  rm(pred.fit)
+  gc()
+  
+  }
+  
+}
+
+# average error over all cv folds
+models_summary$mcp$cv.err.matrix = apply(temp.err.array, c(1,2), mean)
+
+# due to plotting reasons: invert the rows order
+# so that the lambdas are in increasing order
+models_summary$mcp$cv.err.matrix = models_summary$mcp$cv.err.matrix[rev(seq_len(nrow(models_summary$mcp$cv.err.matrix))), ]
+
+models_summary$mcp$cv.err.min = min(models_summary$mcp$cv.err.matrix)
+
+models_summary$mcp$err.min.indexes.lambda.gamma = which(models_summary$mcp$cv.err.matrix ==
+        models_summary$mcp$cv.err.min,
+      arr.ind = TRUE)
+
+models_summary$mcp$lmin = models_summary$mcp$lambda_vals[models_summary$mcp$err.min.indexes.lambda.gamma[1]]
+
+models_summary$mcp$gmin = models_summary$mcp$gamma_vals[models_summary$mcp$err.min.indexes.lambda.gamma[2]]
+
+```
+
+```{r}
+filled.contour(x = log(models_summary$mcp$lambda_vals),
+               y = models_summary$mcp$gamma_vals,
+               z = models_summary$mcp$cv.err.matrix,
+               main = "MCP Cv error contour",
+               xlab = "log lambda",
+               ylab = "gamma",
+               color.palette = viridis::viridis,
+               nlevels = 200)
+
+points(log(models_summary$mcp$lmin),
+      models_summary$mcp$gmin,
+      col = "white", pch = 16)
+
+abline(v = log(models_summary$mcp$lmin), col = "white", lty = 2)
+abline(h = models_summary$mcp$gmin, col = "white", lty = 2)
+
+legend("topleft",
+       legend = c("min err"),
+       col = "white",
+       text.col = "white",
+       lty = 2,
+       bty = "n")
+```
+Check if the estimate is in the non convex region.
+
+```{r}
+mcp.fit.all = ncvreg(X = as.matrix(my.df.year.grouped.matrix),
+                 y = my.df.year.grouped$y,
+                 gamma = models_summary$mcp$gmin,
+                 lambda = models_summary$mcp$lambda_vals %>% sort(decreasing = TRUE),
+                 penalty = "MCP")
+
+plot(mcp.fit.all)
+abline(v = log(models_summary$mcp$gmin), col = "blue", lty = 2, lwd = 2)
+
+```
+
+```{r}
+# backup to save key model info
+save(models_summary, file = "arrests_nta_2010_models_summary.Rdata")
+```
+
 
 ### Discrete response models
 
@@ -534,7 +777,7 @@ For all such cases, using the counts as response an offset has to be imposed: in
 ```
 
 
-```{r}
+```{r, eval = bool_execute_heavy_chunks}
 # WARNING: to fix model matrix
 glmnet.control(mxitnr = 50) # increase maximum no. of IRLS iterations allowed
 # all.fit.poi = glmnet(x = sparse.model.matrix(FORMULA.POI.NO.KY_CD,
@@ -646,7 +889,7 @@ In the R parameterization adopted $\theta = 1/\tau$ which becomes another tuning
 library(MASS)
 ```
 
-```{r}
+```{r, eval = bool_execute_heavy_chunks}
 # WARNING: to fix model matrix
 glmnet.control(mxitnr = 50) # increase maximum no. of IRLS iterations allowed
 # all.fit.quasi.poi = glmnet(x = sparse.model.matrix(FORMULA.POI.NO.KY_CD,
