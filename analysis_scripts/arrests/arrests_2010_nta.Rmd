@@ -340,20 +340,20 @@ temp.err.matr = matrix(NA,
 
 
 for (i in 1:dim(temp.err.matr)[2]){
-  temp.lasso = glmnet(x = month.fit.val.k4.sets[[i]]$train$model_matrix,
+  temp.fit = glmnet(x = month.fit.val.k4.sets[[i]]$train$model_matrix,
                  y = month.fit.val.k4.sets[[i]]$train$df$y,
                  alpha = 1,
                  lambda = models_summary$lasso$lambda_vals)
   
-  pred.lasso = predict.glmnet(temp.lasso,
+  pred.fit = predict.glmnet(temp.fit,
                               newx = month.fit.val.k4.sets[[i]]$test$model_matrix)
   
-  temp.err.matr[,i] = apply(pred.lasso, 2,
+  temp.err.matr[,i] = apply(pred.fit, 2,
                                   function(col) RMSEfun(true_vals = exp(month.fit.val.k4.sets[[i]]$test$df$y),
                                                         pred_vals = exp(col)))
   
-  rm(temp.lasso)
-  rm(pred.lasso)
+  rm(temp.fit)
+  rm(pred.fit)
   gc()
   
 }
@@ -430,35 +430,43 @@ PlotOneDim(x = log(models_summary$lasso$cv.err.matr$lambda),
 ```
 Best $lambda$ is close to zero, so the best solution seems OLS classical solution.
 
-Check beta: proportion of non zero beta among all betas
-```{r}
-lasso.beta.best = all.fit$beta[,which.min(lasso.lambda.errs[,2])]
-length(which(lasso.beta.best != 0)) / length(lasso.beta.best)
-```
-So the solution is not sparse even thought many coefficients are close to zero.
-
-While for the l1se
-```{r}
-lasso.beta.1se = all.fit$beta[,lasso.1se.index]
-length(which(lasso.beta.1se != 0)) / length(lasso.beta.best)
-```
-Still not sparse.
-
-```{r}
-lasso.beta.best %>% sort() %>% plot(main = "Lasso lambda best coefficients",
-                                    xlab = "beta index",
-                                    ylab = "beta value")
-abline(h = 0, col = "red", lty = 2)
-```
-
-
-
-
 ### Elasticnet
 
 Selecting a grid of 20 $\alpha \in (0,1)$.
 ```{r}
-alpha.vals = seq(1e-5, 1 - 1e-5, length = 20)
+models_summary$elasticnet = list()
+
+models_summary$elasticnet$lambda_vals =  exp(seq(-13, -8, 0.1)) %>% sort(decreasing = T)
+models_summary$elasticnet$alpha_vals = seq(1e-5, 1 - 1e-5, length = 20)
+
+# make cv error matrix
+temp.err.matr = matrix(NA,
+                       nrow = length(models_summary$elasticnet$lambda_vals),
+                       ncol = length(models_summary$elasticnet$alpha_vals))
+
+# iterate over alpha
+for(j in 1:dim(temp.err.matr)[2]){
+  # iterate over lambda vals
+ for (i in 1:dim(temp.err.matr)[1]){
+  temp.fit = glmnet(x = month.fit.val.k4.sets[[i]]$train$model_matrix,
+                 y = month.fit.val.k4.sets[[i]]$train$df$y,
+                 alpha = models_summary$elasticnet$alpha_vals[j],
+                 lambda = models_summary$elasticnet$lambda_vals[i])
+  
+  pred.fit = predict.glmnet(temp.fit,
+                              newx = month.fit.val.k4.sets[[i]]$test$model_matrix)
+  
+  temp.err.matr[i,j] = apply(pred.fit, 2,
+                                  function(col) RMSEfun(true_vals = exp(month.fit.val.k4.sets[[i]]$test$df$y),
+                                                        pred_vals = exp(col)))
+  
+  rm(temp.fit)
+  rm(pred.fit)
+  gc()
+  }
+}
+
+# iterate over lambda
 
 
 ```
