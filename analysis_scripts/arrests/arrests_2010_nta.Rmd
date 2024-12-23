@@ -264,7 +264,7 @@ FORMULA.NO.KY_CD = as.formula("y ~. -1 -Pop1 - count +
 Error functions
 ```{r}
 RMSEfun = function(true_vals, pred_vals){
-  sqrt(sum( (true_vals - pred_vals)^2 ))
+  sqrt(mean( (true_vals - pred_vals)^2 ))
 }
 ```
 
@@ -335,7 +335,7 @@ models_summary$lasso = list()
 models_summary$lasso$lambda_vals = exp(seq(-13, -8, 0.1)) %>% sort(decreasing = T)
 
 temp.err.matr = matrix(NA, 
-                      nrow = length(lambda.vals),
+                      nrow = length(models_summary$lasso$lambda_vals),
                       ncol = nrow(month_sets_ind$k4))
 
 
@@ -348,8 +348,7 @@ for (i in 1:dim(temp.err.matr)[2]){
   pred.lasso = predict.glmnet(temp.lasso,
                               newx = month.fit.val.k4.sets[[i]]$test$model_matrix)
   
-  temp.err.matr[,i] = apply(pred.lasso,
-                                  2,
+  temp.err.matr[,i] = apply(pred.lasso, 2,
                                   function(col) RMSEfun(true_vals = exp(month.fit.val.k4.sets[[i]]$test$df$y),
                                                         pred_vals = exp(col)))
   
@@ -359,53 +358,75 @@ for (i in 1:dim(temp.err.matr)[2]){
   
 }
 
+# compute error matrix and lambda min and 1se
 models_summary$lasso$cv.err.matr = cbind(models_summary$lasso$lambda_vals,
                           apply(temp.err.matr,1,mean),
-                          apply(temp.err.matr,1,sd)/ncol(temp.err.matr))
+                          apply(temp.err.matr,1,sd)/ncol(temp.err.matr)) %>% as.data.frame()
 
+colnames(models_summary$lasso$cv.err.matr) = c("lambda", "cv.err", "cv.se")
+
+models_summary$lasso$lmin.index = which.min(models_summary$lasso$cv.err.matr$cv.err)
+
+models_summary$lasso$l1se.index = which.max(models_summary$lasso$cv.err.matr$cv.err <=
+                                              (models_summary$lasso$cv.err.matr$cv.err[models_summary$lasso$lmin.index] +
+                                              models_summary$lasso$cv.err.matr$cv.se[models_summary$lasso$lmin.index]))
+
+models_summary$lasso$lmin = models_summary$lasso$cv.err.matr$lambda[models_summary$lasso$lmin.index]
+models_summary$lasso$l1se = models_summary$lasso$cv.err.matr$lambda[models_summary$lasso$l1se.index]
 ```
 
 
 ```{r}
 # general purpouse plots function
 # assuming the parameter is one-dimensional
+
+PlotOneDim = function(x, y, se,
+                      x.min, x.1se,
+                      xlab, ylab, main,
+                      min.leg, onese.leg){
+  
+  plot(x, y,
+     xlab = xlab,
+     ylab = ylab,
+     main = main,
+     pch = 16,
+     type = "b")
+
+  points(x, y + se, type = "l", col = "red")
+  points(x, y - se, type = "l", col = "red")
+
+  # min
+  abline(v = x.min, lty = 2, col = "blue", lwd = 2)
+
+  # 1.se min
+  abline(v = x.1se,
+        lty = 2, col = "purple", lwd = 2)
+
+
+  legend("topleft",
+       legend = c(min.leg, onese.leg, "se"),
+       col = c("blue", "purple", "red"),
+       lwd = c(2, 2, 1),
+       lty = c(2, 2, 1))
+  
+}
+
 ```
 
 
 
 ```{r}
 
-plot(log(lasso.lambda.errs[,1]), lasso.lambda.errs[,2],
-     xlab = "log lambda",
-     ylab = "RMSE",
-     main = "LASSO CV error",
-     pch = 16,
-     type = "b")
-
-points(log(lasso.lambda.errs[,1]),
-       lasso.lambda.errs[,2] + lasso.lambda.errs[,3], type = "l", col = "red")
-points(log(lasso.lambda.errs[,1]), lasso.lambda.errs[,2] - lasso.lambda.errs[,3], type = "l", col = "red")
-
-lasso.min.index = which.min(lasso.lambda.errs[,2])
-lasso.lmin = lasso.lambda.errs[lasso.min.index,1]
-
-lasso.1se.index = which.max(lasso.lambda.errs[,2] <= (lasso.lambda.errs[lasso.min.index,2] +
-                                                     lasso.lambda.errs[lasso.min.index,3]))
-lasso.l1se = lasso.lambda.errs[lasso.1se.index,1]
-
-# min
-abline(v = log(lasso.lmin), lty = 2, col = "blue", lwd = 2)
-
-# 1.se min
-abline(v = log(lasso.l1se),
-       lty = 2, col = "purple", lwd = 2)
-
-
-legend("topleft",
-       legend = c("lambda min", "lambda 1se", "se"),
-       col = c("blue", "purple", "red"),
-       lwd = c(2, 2, 1),
-       lty = c(2, 2, 1))
+PlotOneDim(x = log(models_summary$lasso$cv.err.matr$lambda),
+           y = models_summary$lasso$cv.err.matr$cv.err,
+           se = models_summary$lasso$cv.err.matr$cv.se,
+           x.min = log(models_summary$lasso$lmin),
+           x.1se = log(models_summary$lasso$l1se),
+           xlab = "log lambda",
+           ylab = "CV error",
+           main = "LASSO CV error",
+          min.leg = "lambda min",
+           onese.leg = "lambda 1se")
 ```
 Best $lambda$ is close to zero, so the best solution seems OLS classical solution.
 
