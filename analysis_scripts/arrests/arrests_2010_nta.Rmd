@@ -347,6 +347,7 @@ for (i in 1:dim(temp.err.matr)[2]){
   
   pred.fit = predict.glmnet(temp.fit,
                               newx = month.fit.val.k4.sets[[i]]$test$model_matrix)
+  print(dim(pred.fit))
   
   temp.err.matr[,i] = apply(pred.fit, 2,
                                   function(col) RMSEfun(true_vals = exp(month.fit.val.k4.sets[[i]]$test$df$y),
@@ -436,43 +437,88 @@ Selecting a grid of 20 $\alpha \in (0,1)$.
 ```{r}
 models_summary$elasticnet = list()
 
-models_summary$elasticnet$lambda_vals =  exp(seq(-13, -8, 0.1)) %>% sort(decreasing = T)
+models_summary$elasticnet$lambda_vals =  exp(seq(-13, -8, 0.1)) # glmnet sorts by decreasing order
 models_summary$elasticnet$alpha_vals = seq(1e-5, 1 - 1e-5, length = 20)
 
 # make cv error matrix
-temp.err.matr = matrix(NA,
-                       nrow = length(models_summary$elasticnet$lambda_vals),
-                       ncol = length(models_summary$elasticnet$alpha_vals))
+temp.err.array = array(NA,
+                       dim = c(length(models_summary$elasticnet$lambda_vals),
+                               length(models_summary$elasticnet$alpha_vals),
+                               nrow(month_sets_ind$k4)))
 
-# iterate over alpha
-for(j in 1:dim(temp.err.matr)[2]){
-  # iterate over lambda vals
- for (i in 1:dim(temp.err.matr)[1]){
-  temp.fit = glmnet(x = month.fit.val.k4.sets[[i]]$train$model_matrix,
-                 y = month.fit.val.k4.sets[[i]]$train$df$y,
+# cycle over cv sets
+for (k in 1:dim(temp.err.array)[3]){
+  
+  # iterate over alpha
+for(j in 1:dim(temp.err.array)[2]){
+
+  temp.fit = glmnet(x = month.fit.val.k4.sets[[k]]$train$model_matrix,
+                 y = month.fit.val.k4.sets[[k]]$train$df$y,
                  alpha = models_summary$elasticnet$alpha_vals[j],
-                 lambda = models_summary$elasticnet$lambda_vals[i])
+                 lambda = models_summary$elasticnet$lambda_vals) # all lambda path
   
   pred.fit = predict.glmnet(temp.fit,
-                              newx = month.fit.val.k4.sets[[i]]$test$model_matrix)
+                              newx = month.fit.val.k4.sets[[k]]$test$model_matrix)
   
-  temp.err.matr[i,j] = apply(pred.fit, 2,
-                                  function(col) RMSEfun(true_vals = exp(month.fit.val.k4.sets[[i]]$test$df$y),
+  
+  temp.err.array[,j,k] = apply(pred.fit, 2,
+                                  function(col) RMSEfun(true_vals = exp(month.fit.val.k4.sets[[k]]$test$df$y),
                                                         pred_vals = exp(col)))
   
   rm(temp.fit)
   rm(pred.fit)
   gc()
+  
   }
+  
 }
 
-# iterate over lambda
+# average error over all cv folds
+models_summary$elasticnet$cv.err.matrix = apply(temp.err.array, c(1,2), mean)
 
+# due to plotting reasons: invert the rows order
+# so that the lambdas are in increasing order
+models_summary$elasticnet$cv.err.matrix = models_summary$elasticnet$cv.err.matrix[rev(seq_len(nrow(models_summary$elasticnet$cv.err.matrix))), ]
+
+models_summary$elasticnet$cv.err.min = min(models_summary$elasticnet$cv.err.matrix)
+
+models_summary$elasticnet$err.min.indexes.lambda.alpha = which(models_summary$elasticnet$cv.err.matrix ==
+        models_summary$elasticnet$cv.err.min,
+      arr.ind = TRUE)
+
+models_summary$elasticnet$lmin = models_summary$elasticnet$lambda_vals[models_summary$elasticnet$err.min.indexes.lambda.alpha[1]]
+
+models_summary$elasticnet$amin = models_summary$elasticnet$alpha_vals[models_summary$elasticnet$err.min.indexes.lambda.alpha[2]]
 
 ```
 
+```{r}
+filled.contour(x = log(models_summary$elasticnet$lambda_vals),
+               y = models_summary$elasticnet$alpha_vals,
+               z = models_summary$elasticnet$cv.err.matrix,
+               zlim = c(0.002, 0.003),
+               main = "Elasticnet Cv error contour",
+               xlab = "log lambda",
+               ylab = "alpha",
+               color.palette = viridis::viridis,
+               nlevels = 200)
 
-### Grouped LASSO
+points(log(models_summary$elasticnet$lmin),
+      models_summary$elasticnet$amin,
+      col = "white", pch = 16)
+
+abline(v = log(models_summary$elasticnet$lmin), col = "white", lty = 2)
+abline(h = log(models_summary$elasticnet$amin), col = "white", lty = 2)
+
+legend("topleft",
+       legend = c("min err"),
+       col = "white",
+       text.col = "white",
+       lty = 2,
+       bty = "n")
+```
+
+The best selected model is close to a ridge regression.
 
 ### Scad MCP
 
@@ -526,7 +572,7 @@ for (i in 1:dim(lasso.cv.error.matr)[2]){
                               newx = month.fit.val.k4.sets[[i]]$test$model_matrix,
                               newoffset = log(month.fit.val.k4.sets[[i]]$test$df$Pop1) + 
                                 log(n_months_test),
-                              type = "response") #predict the mean -> check
+                              type = "response") # predict the mean
   
   # to check offset
   lasso.cv.error.matr[,i] = apply(pred.lasso,
