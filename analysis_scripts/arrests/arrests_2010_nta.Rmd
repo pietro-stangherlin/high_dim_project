@@ -14,6 +14,8 @@ gc()
 
 library(tidyverse)
 library(Matrix)
+library(viridis)
+library(lattice)
 ```
 
 ```{r}
@@ -441,7 +443,6 @@ PlotOneDim = function(x, y, se,
 
 
 ```{r}
-
 PlotOneDim(x = log(models_summary$lasso$cv.err.matr$lambda),
            y = models_summary$lasso$cv.err.matr$cv.err,
            se = models_summary$lasso$cv.err.matr$cv.se,
@@ -534,20 +535,18 @@ filled.contour(x = log(models_summary$elasticnet$lambda_vals),
                xlab = "log lambda",
                ylab = "alpha",
                color.palette = viridis::viridis,
-               nlevels = 200)
-
-points(log(models_summary$elasticnet$lmin),
-      models_summary$elasticnet$amin,
-      col = "white", pch = 16)
-
-abline(v = log(models_summary$elasticnet$lmin), col = "white", lty = 2)
-abline(h = models_summary$elasticnet$amin, col = "white", lty = 2)
+               nlevels = 200,
+               plot.axes = { 
+                 axis(1)
+                 axis(2)
+                 points(log(models_summary$elasticnet$lmin), models_summary$elasticnet$amin,
+                            col = "red", pch = 19, cex = 1.5)})
 
 legend("topleft",
        legend = c("min err"),
-       col = "white",
-       text.col = "white",
-       lty = 2,
+       col = "red",
+       text.col = "red",
+       lty = 1,
        bty = "n")
 ```
 
@@ -626,20 +625,19 @@ filled.contour(x = log(models_summary$scad$lambda_vals),
                xlab = "log lambda",
                ylab = "gamma",
                color.palette = viridis::viridis,
-               nlevels = 200)
+               nlevels = 200,
+               plot.axes = { 
+                 axis(1)
+                 axis(2)
+                 points(log(models_summary$scad$lmin), models_summary$scad$gmin,
+                            col = "red", pch = 19, cex = 1.5)})
 
-points(log(models_summary$scad$lmin),
-      models_summary$scad$gmin,
-      col = "white", pch = 16)
-
-abline(v = log(models_summary$scad$lmin), col = "white", lty = 2)
-abline(h = models_summary$scad$gmin, col = "white", lty = 2)
 
 legend("topleft",
        legend = c("min err"),
-       col = "white",
-       text.col = "white",
-       lty = 2,
+       col = "red",
+       text.col = "red",
+       lty = 1,
        bty = "n")
 ```
 Check if the estimate is in the non convex region.
@@ -648,7 +646,7 @@ Check if the estimate is in the non convex region.
 scad.fit.all = ncvreg(X = as.matrix(my.df.year.grouped.matrix),
                  y = my.df.year.grouped$y,
                  gamma = models_summary$scad$gmin,
-                 lambda = models_summary$scad$lambda_vals %>% sort(decreasing = T),
+                 lambda = models_summary$scad$lambda_vals,
                  penalty = "SCAD")
 
 plot(scad.fit.all, log.l = TRUE)
@@ -729,20 +727,18 @@ filled.contour(x = log(models_summary$mcp$lambda_vals),
                xlab = "log lambda",
                ylab = "gamma",
                color.palette = viridis::viridis,
-               nlevels = 200)
-
-points(log(models_summary$mcp$lmin),
-      models_summary$mcp$gmin,
-      col = "white", pch = 16)
-
-abline(v = log(models_summary$mcp$lmin), col = "white", lty = 2)
-abline(h = models_summary$mcp$gmin, col = "white", lty = 2)
+               nlevels = 200,
+                plot.axes = { 
+                 axis(1)
+                 axis(2)
+                 points(log(models_summary$mcp$lmin), models_summary$mcp$gmin,
+                            col = "red", pch = 19, cex = 1.5)})
 
 legend("topleft",
        legend = c("min err"),
-       col = "white",
-       text.col = "white",
-       lty = 2,
+       col = "red",
+       text.col = "red",
+       lty = 1,
        bty = "n")
 ```
 Check if the estimate is in the non convex region.
@@ -780,6 +776,7 @@ For all such cases, using the counts as response an offset has to be imposed: in
 ```{r, eval = bool_execute_heavy_chunks}
 # WARNING: to fix model matrix
 glmnet.control(mxitnr = 50) # increase maximum no. of IRLS iterations allowed
+
 # all.fit.poi = glmnet(x = sparse.model.matrix(FORMULA.POI.NO.KY_CD,
 #                                          data = my.df.year.grouped),
 #                  y = my.df.year.grouped$count,
@@ -789,88 +786,77 @@ glmnet.control(mxitnr = 50) # increase maximum no. of IRLS iterations allowed
 #                  intercept = TRUE,
 #                  standardize = TRUE)
 
-lambda.vals.poi = exp(seq(-10, 5, 0.1))
+models_summary$lasso.poi = list()
+models_summary$lasso.poi$lambda_vals = exp(seq(-15, 3, 0.1)) %>% sort(decreasing = TRUE)
 
-# validation error matrix
-# each col
-lasso.cv.error.matr = matrix(NA,
-                             nrow = length(lambda.vals.poi),
-                             ncol = nrow(month_sets_ind$k4))
+temp.err.matr = matrix(NA, 
+                      nrow = length(models_summary$lasso.poi$lambda_vals),
+                      ncol = nrow(month_sets_ind$k4))
 
+# offset
 n_months_train = ncol(month_sets_ind$k4)
 n_months_test = 12 - n_months_train
 
-for (i in 1:dim(lasso.cv.error.matr)[2]){
-  temp.lasso = glmnet(x = month.fit.val.k4.sets[[i]]$train$model_matrix,
+for (i in 1:dim(temp.err.matr)[2]){
+  temp.fit = glmnet(x = month.fit.val.k4.sets[[i]]$train$model_matrix,
                  y = month.fit.val.k4.sets[[i]]$train$df$count,
                  family = poisson(),
                  offset = log(month.fit.val.k4.sets[[i]]$train$df$Pop1) + 
                                 log(n_months_train),
                  alpha = 1,
-                 lambda = lambda.vals.poi,
+                 lambda = models_summary$lasso.poi$lambda_vals,
                  intercept = TRUE,
                  standardize = TRUE)
   
-  pred.lasso = predict.glmnet(temp.lasso,
+  pred.fit = predict.glmnet(temp.lasso,
                               newx = month.fit.val.k4.sets[[i]]$test$model_matrix,
                               newoffset = log(month.fit.val.k4.sets[[i]]$test$df$Pop1) + 
                                 log(n_months_test),
                               type = "response") # predict the mean
   
   # to check offset
-  lasso.cv.error.matr[,i] = apply(pred.lasso,
-                                  2,
-                                  function(col) RMSEfun(true_vals =
+  temp.err.matr[,i] = apply(pred.fit, 2,
+                            function(col) RMSEfun(true_vals =
                                                         month.fit.val.k4.sets[[i]]$test$df$count,
                                                         pred_vals = col))
   
-  rm(temp.lasso)
-  rm(pred.lasso)
+  rm(temp.fit)
+  rm(pred.fit)
   gc()
   
 }
+
+
+
+# compute error matrix and lambda min and 1se
+models_summary$lasso$cv.err.matr = cbind(models_summary$lasso.poi$lambda_vals,
+                          apply(temp.err.matr,1,mean),
+                          apply(temp.err.matr,1,sd)/ncol(temp.err.matr)) %>% as.data.frame()
+
+colnames(models_summary$lasso.poi$cv.err.matr) = c("lambda", "cv.err", "cv.se")
+
+models_summary$lasso.poi$lmin.index = which.min(models_summary$lasso.poi$cv.err.matr$cv.err)
+
+models_summary$lasso.poi$l1se.index = which.max(models_summary$lasso.poi$cv.err.matr$cv.err <=
+                                              (models_summary$lasso.poi$cv.err.matr$cv.err[models_summary$lasso.poi$lmin.index] +
+                                              models_summary$lasso.poi$cv.err.matr$cv.se[models_summary$lasso.poi$lmin.index]))
+
+models_summary$lasso.poi$lmin = models_summary$lasso.poi$cv.err.matr$lambda[models_summary$lasso.poi$lmin.index]
+models_summary$lasso.poi$l1se = models_summary$lasso.poi$cv.err.matr$lambda[models_summary$lasso.poi$l1se.index]
 ```
 
-```{r}
-# find cv error average and s.e
-lasso.lambda.errs = cbind(lambda.vals.poi %>% sort(decreasing = T),
-                          apply(lasso.cv.error.matr,1,mean),
-                          apply(lasso.cv.error.matr,1,sd)/ncol(lasso.cv.error.matr))
-
-```
 
 ```{r}
-plot(log(lasso.lambda.errs[,1]), lasso.lambda.errs[,2],
-     xlab = "log lambda",
-     ylab = "RMSE",
-     main = "LASSO POI CV error",
-     pch = 16,
-     type = "b")
-
-points(log(lasso.lambda.errs[,1]),
-       lasso.lambda.errs[,2] + lasso.lambda.errs[,3], type = "l", col = "red")
-points(log(lasso.lambda.errs[,1]), lasso.lambda.errs[,2] - lasso.lambda.errs[,3], type = "l", col = "red")
-
-lasso.min.index = which.min(lasso.lambda.errs[,2])
-lasso.lmin = lasso.lambda.errs[lasso.min.index,1]
-
-lasso.1se.index = which.max(lasso.lambda.errs[,2] <= (lasso.lambda.errs[lasso.min.index,2] +
-                                                     lasso.lambda.errs[lasso.min.index,3]))
-lasso.l1se = lasso.lambda.errs[lasso.1se.index,1]
-
-# min
-abline(v = log(lasso.lmin), lty = 2, col = "blue", lwd = 2)
-
-# 1.se min
-abline(v = log(lasso.l1se),
-       lty = 2, col = "purple", lwd = 2)
-
-
-legend("topleft",
-       legend = c("lambda min", "lambda 1se", "se"),
-       col = c("blue", "purple", "red"),
-       lwd = c(2, 2, 1),
-       lty = c(2, 2, 1))
+PlotOneDim(x = log(models_summary$lasso.poi$cv.err.matr$lambda),
+           y = models_summary$lasso.poi$cv.err.matr$cv.err,
+           se = models_summary$lasso.poi$cv.err.matr$cv.se,
+           x.min = log(models_summary$lasso.poi$lmin),
+           x.1se = log(models_summary$lasso.poi$l1se),
+           xlab = "log lambda",
+           ylab = "CV error",
+           main = "LASSO Poisson CV error",
+          min.leg = "lambda min",
+           onese.leg = "lambda 1se")
 ```
 There's a problem here since for smaller $\lambda$ values the algorithm does not converge.
 
