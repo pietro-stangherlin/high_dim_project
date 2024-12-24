@@ -185,6 +185,7 @@ nrow(year_grouped) / (var_unique_len["NTA2020"] *
                        "PERP_SEX", "PERP_RACE")]))
 ```
 We decide to not employ the MONTH time variable as a covariate but use it for a model selection method.
+This is because in order to get a count measure one aggregation criterion is needed, here aggregation by month is chosen.
 
 
 ### Variables description
@@ -214,7 +215,7 @@ my.df %>%
 ### Model selection method
 
 Given the previously described constraints, in order to be able to apply a cross validation (CV) selection method we choose to ignore the time (MONTH) factor using MONTH as index to create the CV folds as described below.
-Choose k: the number of validation sets (example k = 4) each validation set is made by grouped observations of 12 / k (3) months and the months left are used to fit the model. To try to compensate and average for seasonal fluctuations the validation months are chosen as spaced as possible, for example, in the case k = 4 the first validation set is (january, may, september), the second set is (february, june, october), the third is (march, july, november) and the forth is (april, august, december); in order to make each response comparable having used a different number of months a new response is defined as the arrests ratio divided by the number of months used in the grouping.
+Choose k: the number of validation sets (example k = 4) each validation set is made by grouped observations of 12 / k (3) months and the months left (9) are used to fit the model. To try to compensate and average for seasonal fluctuations the validation months are chosen as spaced as possible, for example, in the case k = 4 the first validation set is (january, may, september), the second set is (february, june, october), the third is (march, july, november) and the forth is (april, august, december); in order to make each response comparable having used a different number of months a new response is defined as the arrests ratio divided by the number of months used in the grouping.
 
 ```{r}
 # Groub by months indexes
@@ -365,17 +366,17 @@ The simplest assumption is to assume a linear (monotone) trend of the response a
 ```{r}
 # general purpuose lasso CV function
 Lasso_CV <- function(cv_sets,
-                                  my.lambda_vals) {
+                                  my.lambda.vals) {
   
   temp_err_matr <- matrix(NA, 
-                          nrow = length(my.lambda_vals),
+                          nrow = length(my.lambda.vals),
                           ncol = length(cv_sets))
   
   for (i in 1:dim(temp_err_matr)[2]) {
     temp_fit <- glmnet(x = cv_sets[[i]]$train$model_matrix,
                        y = cv_sets[[i]]$train$df$y,
                        alpha = 1,
-                       lambda = my.lambda_vals)
+                       lambda = my.lambda.vals)
     
     pred_fit <- predict(temp_fit,
                         newx = cv_sets[[i]]$test$model_matrix)
@@ -400,10 +401,10 @@ Lasso_CV <- function(cv_sets,
   l1se_index <- which.max(cv_err_matr[,"cv.err"] <= (cv_err_matr[lmin_index,"cv.err"] + cv_err_matr[lmin_index,"cv.se"]))
   
   list_summary <- list()
-  list_summary[["lambda"]] <- my.lambda_vals
+  list_summary[["lambda"]] <- my.lambda.vals
   
-  list_summary[["lmin"]] <- my.lambda_vals[lmin_index]
-  list_summary[["l1se"]] <- my.lambda_vals[l1se_index]
+  list_summary[["lmin"]] <- my.lambda.vals[lmin_index]
+  list_summary[["l1se"]] <- my.lambda.vals[l1se_index]
   list_summary[["cv.err.matr"]] = cv_err_matr
   
   rm(cv_err_matr)
@@ -458,7 +459,7 @@ PlotOneDim = function(x, y, se,
 
 ```{r}
 models_summary$lasso.noint <- Lasso_CV(month.noint.fit.val.k4.sets,
-                                        my.lambda_vals = exp(seq(-17, -6, 0.1)) %>% sort(decreasing = T))
+                                        my.lambda.vals = exp(seq(-17, -6, 0.1)) %>% sort(decreasing = T))
 ```
 
 
@@ -481,7 +482,7 @@ PlotOneDim(x = log(models_summary$lasso.noint$lambda),
 
 ```{r}
 models_summary$lasso <- Lasso_CV(month.fit.val.k4.sets,
-                                        my.lambda_vals = exp(seq(-13, -6, 0.1)) %>% sort(decreasing = T))
+                                        my.lambda.vals = exp(seq(-13, -6, 0.1)) %>% sort(decreasing = T))
 ```
 
 ```{r}
@@ -577,15 +578,6 @@ Elastic_Cv <- function(cv.sets,
 
 ```
 
-
-#### No Interaction
-
-```{r}
-models_summary$elasticnet.noint = Elastic_Cv(cv.sets = month.noint.fit.val.k4.sets,
-                                             my.lambda.vals = exp(seq(-20, -8, 0.1)) %>% sort(decreasing = TRUE),
-                                             my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 20))
-```
-
 ```{r}
 # generic two parameters error plots
 # invert the rows order because filled.contour requires all axis values in ascending order
@@ -606,9 +598,9 @@ TwoParErrPlot = function(model_list,
 filled.contour(x = log(model_list[[row_par_name]]) %>% sort(),
                y = model_list[[col_par_name]],
                z = model_list[[cv_err_matr_name]][(1:n_row) %>% sort(decreasing = TRUE),],
-               main = "Elasticnet no interaction Cv error contour",
-               xlab = "log lambda",
-               ylab = "alpha",
+               main = my.main,
+               xlab = my.xlab,
+               ylab = my.ylab,
                color.palette = viridis::viridis,
                nlevels = 200,
                plot.axes = { 
@@ -626,6 +618,13 @@ legend("topleft",
 }
 ```
 
+#### No Interaction
+
+```{r}
+models_summary$elasticnet.noint = Elastic_Cv(cv.sets = month.noint.fit.val.k4.sets,
+                                             my.lambda.vals = exp(seq(-20, -8, 0.1)) %>% sort(decreasing = TRUE),
+                                             my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 20))
+```
 
 ```{r}
 
@@ -711,9 +710,6 @@ NonConvex_Cv <- function(cv.sets,
   
   # min error lambda and alpha indexes
   min_indexes = which(cv.err.matr == min(cv.err.matr), arr.ind = TRUE)
-  
-  # debug
-  print(min_indexes)
   
   list_summary <- list()
   list_summary[["lambda"]] <- my.lambda.vals
@@ -863,83 +859,117 @@ save(models_summary, file = "arrests_nta_2010_models_summary.Rdata")
 In reality the counts are discrete so it seems reasonable to also try discrete response models such as Poisson, Negative Binomial and zero inflated Poisson.
 For all such cases, using the counts as response an offset has to be imposed: in analogy from what has been done assuming the continuous response the offset will be the product of the NTA Population by the number of months considered (in log scale using the canonincal log link for a Poisson GLM)
 
+
+```{r}
+# general purpuose lasso CV function
+#' @param my.offset_constant_train (int): take the log and add to train fold offset (same for all folds)
+#' @param my.offset_constant_test (int): take the log and add to train fold offset ((same for all folds))
+#' @param my.offset_var_name (char): take the log and add to train fold offset (assumed is a variable in cv sets)
+Lasso_Offset_CV <- function(cv_sets,
+                            my.lambda.vals,
+                            my.response.name = "count",
+                            my.family = poisson(),
+                            my.offset_constant_train = 9, # 9 months
+                            my.offset_constant_test = 3, # 12 - 9 months
+                            my.offset_var_name = "Pop1") {
+  
+  temp_err_matr <- matrix(NA, 
+                          nrow = length(my.lambda.vals),
+                          ncol = length(cv_sets))
+  
+  for (i in 1:length(cv_sets)) {
+    temp_fit <- glmnet(x = cv_sets[[i]]$train$model_matrix,
+                       y = cv_sets[[i]]$train$df[[my.response.name]],
+                       alpha = 1,
+                       lambda = my.lambda.vals,
+                       family = my.family,
+                       offset = log(my.offset_constant_train) + log(cv_sets[[i]]$train$df[[my.offset_var_name]]))
+    
+    pred_fit <- predict(temp_fit,
+                        newx = cv_sets[[i]]$test$model_matrix,
+                        newoffset = log(my.offset_constant_test) + log(cv_sets[[i]]$test$df[[my.offset_var_name]]),
+                        type = "response")
+    
+    temp_err_matr[, i] <- apply(pred_fit, 2,
+                                function(col) RMSEfun(true_vals = cv_sets[[i]]$test$df[[my.response.name]],
+                                                      pred_vals = col))
+    
+    rm(temp_fit)
+    rm(pred_fit)
+    gc()
+  }
+  
+  # Compute error matrix and lambda min and 1se
+  cv_err_matr <- cbind(apply(temp_err_matr, 1, mean),
+                                    apply(temp_err_matr, 1, sd) / ncol(temp_err_matr)) %>% as.data.frame()
+  
+  colnames(cv_err_matr) <- c("cv.err", "cv.se")
+  
+  lmin_index <- which.min(cv_err_matr$cv.err)
+  
+  l1se_index <- which.max(cv_err_matr[,"cv.err"] <= (cv_err_matr[lmin_index,"cv.err"] + cv_err_matr[lmin_index,"cv.se"]))
+  
+  list_summary <- list()
+  list_summary[["lambda"]] <- my.lambda.vals
+  
+  list_summary[["lmin"]] <- my.lambda.vals[lmin_index]
+  list_summary[["l1se"]] <- my.lambda.vals[l1se_index]
+  list_summary[["cv.err.matr"]] = cv_err_matr
+  
+  rm(cv_err_matr)
+  rm(temp_err_matr)
+  gc()
+  
+  # add all to list
+  
+  return(list_summary)
+}
+
+```
+
+
 ### Poisson LASSO
 
 ```{r}
 # Known convergence difficult, see help here. https://cran.r-project.org/web/packages/glmnet/vignettes/glmnetFamily.pdf
+glmnet.control(mxitnr = 50) # increase maximum no. of IRLS iterations allowed
+```
+
+#### No interaction
+
+```{r, eval = bool_execute_heavy_chunks}
+models_summary$lasso.poi.noint = Lasso_Offset_CV(cv_sets = month.noint.fit.val.k4.sets,
+                                          my.lambda.vals = exp(seq(-15, 3, 0.1)) %>% sort(decreasing = TRUE),
+                                          my.response.name = "count",
+                                          my.family = poisson(),
+                                          my.offset_constant_train = 9, # 9 months
+                                          my.offset_constant_test = 3, # 12 - 9 months
+                                          my.offset_var_name = "Pop1")
 ```
 
 
+```{r}
+PlotOneDim(x = log(models_summary$lasso.poi.noint$lambda),
+           y = models_summary$lasso.poi.noint$cv.err.matr[,"cv.err"],
+           se = models_summary$lasso.poi.noint$cv.err.matr[,"cv.se"],
+           x.min = log(models_summary$lasso.poi.noint$lmin),
+           x.1se = log(models_summary$lasso.poi.noint$l1se),
+           xlab = "log lambda",
+           ylab = "CV error",
+           main = "LASSO no interaction Poisson CV error",
+          min.leg = "lambda min",
+           onese.leg = "lambda 1se")
+```
+
+#### Yes interaction
 ```{r, eval = bool_execute_heavy_chunks}
-# WARNING: to fix model matrix
-glmnet.control(mxitnr = 50) # increase maximum no. of IRLS iterations allowed
-
-# all.fit.poi = glmnet(x = sparse.model.matrix(FORMULA.POI.NO.KY_CD,
-#                                          data = my.df.year.grouped),
-#                  y = my.df.year.grouped$count,
-#                  family = poisson(),
-#                  offset = log(my.df.year.grouped$Pop1 * 12), # 12 months
-#                  alpha = 1,
-#                  intercept = TRUE,
-#                  standardize = TRUE)
-
-models_summary$lasso.poi = list()
-models_summary$lasso.poi$lambda_vals = exp(seq(-15, 3, 0.1)) %>% sort(decreasing = TRUE)
-
-temp.err.matr = matrix(NA, 
-                      nrow = length(models_summary$lasso.poi$lambda_vals),
-                      ncol = nrow(month_sets_ind$k4))
-
-# offset
-n_months_train = ncol(month_sets_ind$k4)
-n_months_test = 12 - n_months_train
-
-for (i in 1:dim(temp.err.matr)[2]){
-  temp.fit = glmnet(x = month.fit.val.k4.sets[[i]]$train$model_matrix,
-                 y = month.fit.val.k4.sets[[i]]$train$df$count,
-                 family = poisson(),
-                 offset = log(month.fit.val.k4.sets[[i]]$train$df$Pop1) + 
-                                log(n_months_train),
-                 alpha = 1,
-                 lambda = models_summary$lasso.poi$lambda_vals,
-                 intercept = TRUE,
-                 standardize = TRUE)
-  
-  pred.fit = predict.glmnet(temp.lasso,
-                              newx = month.fit.val.k4.sets[[i]]$test$model_matrix,
-                              newoffset = log(month.fit.val.k4.sets[[i]]$test$df$Pop1) + 
-                                log(n_months_test),
-                              type = "response") # predict the mean
-  
-  # to check offset
-  temp.err.matr[,i] = apply(pred.fit, 2,
-                            function(col) RMSEfun(true_vals =
-                                                        month.fit.val.k4.sets[[i]]$test$df$count,
-                                                        pred_vals = col))
-  
-  rm(temp.fit)
-  rm(pred.fit)
-  gc()
-  
-}
-
-
-
-# compute error matrix and lambda min and 1se
-models_summary$lasso$cv.err.matr = cbind(models_summary$lasso.poi$lambda_vals,
-                          apply(temp.err.matr,1,mean),
-                          apply(temp.err.matr,1,sd)/ncol(temp.err.matr)) %>% as.data.frame()
-
-colnames(models_summary$lasso.poi$cv.err.matr) = c("lambda", "cv.err", "cv.se")
-
-models_summary$lasso.poi$lmin.index = which.min(models_summary$lasso.poi$cv.err.matr$cv.err)
-
-models_summary$lasso.poi$l1se.index = which.max(models_summary$lasso.poi$cv.err.matr$cv.err <=
-                                              (models_summary$lasso.poi$cv.err.matr$cv.err[models_summary$lasso.poi$lmin.index] +
-                                              models_summary$lasso.poi$cv.err.matr$cv.se[models_summary$lasso.poi$lmin.index]))
-
-models_summary$lasso.poi$lmin = models_summary$lasso.poi$cv.err.matr$lambda[models_summary$lasso.poi$lmin.index]
-models_summary$lasso.poi$l1se = models_summary$lasso.poi$cv.err.matr$lambda[models_summary$lasso.poi$l1se.index]
+models_summary$lasso.poi = Lasso_Offset_CV(cv_sets = month.fit.val.k4.sets,
+                                          my.lambda.vals = exp(seq(-15, 3, 0.1)) %>% sort(decreasing = TRUE),
+                                          my.response.name = "count",
+                                          my.family = poisson(),
+                                          my.offset_constant_train = 9, # 9 months
+                                          my.offset_constant_test = 3, # 12 - 9 months
+                                          my.offset_var_name = "Pop1")
 ```
 
 
@@ -957,11 +987,141 @@ PlotOneDim(x = log(models_summary$lasso.poi$cv.err.matr$lambda),
 ```
 There's a problem here since for smaller $\lambda$ values the algorithm does not converge.
 
-### Poisson Elasticnet
 ```{r}
-month.fit.val.k4.sets[[i]]$test$count %>% length()
+# backup to save key model info
+save(models_summary, file = "arrests_nta_2010_models_summary.Rdata")
 ```
 
+### Poisson Elasticnet
+```{r}
+# general purpuose elasticnet CV function
+Elastic_Offset_Cv <- function(cv.sets,
+                            my.lambda.vals,
+                            my.alpha.vals,
+                            my.response.name = "count",
+                            my.family = poisson(),
+                            my.offset_constant_train = 9, # 9 months
+                            my.offset_constant_test = 3, # 12 - 9 months
+                            my.offset_var_name = "Pop1") {
+  
+  temp.err.array <- array(NA,
+                           dim = c(length(my.lambda.vals),
+                                   length(my.alpha.vals),
+                                   length(cv.sets)))
+  
+  # cycle over cv sets
+  for (k in 1:length(cv.sets)) {
+    
+    # cycle over alpha values
+    for(j in 1:length(my.alpha.vals)){
+      
+    temp_fit <- glmnet(x = cv.sets[[k]]$train$model_matrix,
+                       y = cv.sets[[k]]$train$df$y,
+                       alpha = my.alpha.vals[j],
+                       lambda = my.lambda.vals,
+                       family = my.family,
+                       offset = log(my.offset_constant_train) + log(cv.sets[[k]]$train$df[[my.offset_var_name]]))
+    
+    pred_fit <- predict(temp_fit,
+                        newx = cv.sets[[k]]$test$model_matrix,
+                        newoffset = log(my.offset_constant_test) + log(cv.sets[[k]]$test$df[[my.offset_var_name]]))
+    
+    temp.err.array[,j,k] <- apply(pred_fit, 2,
+                                function(col) RMSEfun(true_vals = cv.sets[[k]]$test$df[[my.response.name]],
+                                                      pred_vals = col))
+    
+    rm(temp_fit)
+    rm(pred_fit)
+    gc()
+      
+    }
+    
+  }
+  
+  # Compute error matrix
+  # rows: lambda
+  # cols: alpha
+  cv.err.matr <- apply(temp.err.array, c(1,2), mean)
+  
+  # min error lambda and alpha indexes
+  min_indexes = which(cv.err.matr == min(cv.err.matr), arr.ind = TRUE)
+  
+  list_summary <- list()
+  list_summary[["lambda"]] <- my.lambda.vals
+  list_summary[["alpha"]] <- my.alpha.vals
+  
+  list_summary[["lmin"]] <- my.lambda.vals[min_indexes[1]]
+  list_summary[["amin"]] <- my.alpha.vals[min_indexes[2]]
+  list_summary[["cv.err.matr"]] = cv.err.matr
+  
+  rm(cv.err.matr)
+  rm(temp.err.array)
+  gc()
+  
+  # add all to list
+  
+  return(list_summary)
+}
+
+```
+
+#### No interaction
+
+```{r, warning=FALSE, eval = bool_execute_heavy_chunks}
+models_summary$elasticnet.poi.noint = Elastic_Offset_Cv(cv.sets = month.noint.fit.val.k4.sets,
+                                                        my.lambda.vals = exp(seq(-10, 2, 0.2)) %>% sort(decreasing = TRUE),
+                                                        my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 20),
+                                                        my.response.name = "count",
+                                                        my.family = poisson(),
+                                                        my.offset_constant_train = 9, # 9 months
+                                                        my.offset_constant_test = 3, # 12 - 9 months
+                                                        my.offset_var_name = "Pop1")
+```
+
+```{r}
+
+TwoParErrPlot(model_list = models_summary$elasticnet.poi.noint,
+              row_par_name = "lambda",
+              col_par_name = "alpha",
+              cv_err_matr_name = "cv.err.matr",
+              row_par_min_name = "lmin",
+              col_par_min_name = "amin",
+              my.main = "Elasticnet no interaction Cv error contour",
+              my.xlab = "log lambda",
+              my.ylab = "alpha")
+```
+
+
+#### Yes interaction
+
+```{r, warning=FALSE, eval = bool_execute_heavy_chunks}
+models_summary$elasticnet.poi = Elastic_Offset_Cv(cv.sets = month.fit.val.k4.sets,
+                                                        my.lambda.vals = exp(seq(-10, 2, 0.2)) %>% sort(decreasing = TRUE),
+                                                        my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 20),
+                                                        my.response.name = "count",
+                                                        my.family = poisson(),
+                                                        my.offset_constant_train = 9, # 9 months
+                                                        my.offset_constant_test = 3, # 12 - 9 months
+                                                        my.offset_var_name = "Pop1")
+```
+
+```{r}
+
+TwoParErrPlot(model_list = models_summary$elasticnet.poi,
+              row_par_name = "lambda",
+              col_par_name = "alpha",
+              cv_err_matr_name = "cv.err.matr",
+              row_par_min_name = "lmin",
+              col_par_min_name = "amin",
+              my.main = "Elasticnet Cv error contour",
+              my.xlab = "log lambda",
+              my.ylab = "alpha")
+```
+
+```{r}
+# backup to save key model info
+save(models_summary, file = "arrests_nta_2010_models_summary.Rdata")
+```
 
 ### Neg bin Lasso
 
@@ -972,93 +1132,132 @@ In the R parameterization adopted $\theta = 1/\tau$ which becomes another tuning
 library(MASS)
 ```
 
-```{r, eval = bool_execute_heavy_chunks}
-# WARNING: to fix model matrix
-glmnet.control(mxitnr = 50) # increase maximum no. of IRLS iterations allowed
-# all.fit.quasi.poi = glmnet(x = sparse.model.matrix(FORMULA.POI.NO.KY_CD,
-#                                          data = my.df.year.grouped),
-#                  y = my.df.year.grouped$count,
-#                  family = negative.binomial(theta = 5), # another reg param.
-#                  offset = log(my.df.year.grouped$Pop1 * 12), # 12 months
-#                  alpha = 1,
-#                  intercept = TRUE,
-#                  standardize = TRUE)
-
-lambda.vals.poi = all.fit.poi$lambda[1:35] # convergence issues for 36th lambda
-
-# validation error matrix
-# each col
-lasso.cv.error.matr = matrix(NA,
-                             nrow = length(lambda.vals.poi),
-                             ncol = nrow(month_sets_ind$k4))
-
-n_months_train = ncol(month_sets_ind$k4)
-n_months_test = 12 - n_months_train
-
-for (i in 1:dim(lasso.cv.error.matr)[2]){
-  temp.lasso = glmnet(x = month.fit.val.k4.sets[[i]]$train$model_matrix,
-                 y = month.fit.val.k4.sets[[i]]$train$count,
-                 family = negative.binomial(theta = 5),
-                 offset = log(month.fit.val.k4.sets[[i]]$train$Pop1) + 
-                                log(n_months_train),
-                 alpha = 1,
-                 lambda = lambda.vals.poi,
-                 intercept = TRUE,
-                 standardize = TRUE)
+```{r}
+# general purpuose negbin CV function
+LASSO_NegBin_Offset_Cv <- function(cv.sets,
+                            my.lambda.vals,
+                            my.theta.vals,
+                            my.response.name = "count",
+                            my.offset_constant_train = 9, # 9 months
+                            my.offset_constant_test = 3, # 12 - 9 months
+                            my.offset_var_name = "Pop1") {
   
-  pred.lasso = predict.glmnet(temp.lasso,
-                              newx = month.fit.val.k4.sets[[i]]$test$model_matrix,
-                              newoffset = log(month.fit.val.k4.sets[[i]]$test$Pop1) + 
-                                log(n_months_test),
-                              type = "response") #predict the mean -> check
+  temp.err.array <- array(NA,
+                           dim = c(length(my.lambda.vals),
+                                   length(my.theta.vals),
+                                   length(cv.sets)))
   
-  # to check offset
-  lasso.cv.error.matr[,i] = apply(pred.lasso,
-                                  2,
-                                  function(col) RMSEfun(true_vals =
-                                                        month.fit.val.k4.sets[[i]]$test$count,
-                                                        pred_vals = col))
+  # cycle over cv sets
+  for (k in 1:length(cv.sets)) {
+    
+    # cycle over alpha values
+    for(j in 1:length(my.theta.vals)){
+      
+    temp_fit <- glmnet(x = cv.sets[[k]]$train$model_matrix,
+                       y = cv.sets[[k]]$train$df$y,
+                       alpha = 1,
+                       lambda = my.lambda.vals,
+                       family = negative.binomial(theta = my.theta.vals[j]),
+                       offset = log(my.offset_constant_train) + log(cv.sets[[k]]$train$df[[my.offset_var_name]]))
+    
+    pred_fit <- predict(temp_fit,
+                        newx = cv.sets[[k]]$test$model_matrix,
+                        newoffset = log(my.offset_constant_test) + log(cv.sets[[k]]$test$df[[my.offset_var_name]]))
+    
+    temp.err.array[,j,k] <- apply(pred_fit, 2,
+                                function(col) RMSEfun(true_vals = cv.sets[[k]]$test$df[[my.response.name]],
+                                                      pred_vals = col))
+    
+    rm(temp_fit)
+    rm(pred_fit)
+    gc()
+      
+    }
+    
+  }
   
-  rm(temp.lasso)
-  rm(pred.lasso)
+  # Compute error matrix
+  # rows: lambda
+  # cols: alpha
+  cv.err.matr <- apply(temp.err.array, c(1,2), mean)
+  
+  # min error lambda and alpha indexes
+  min_indexes = which(cv.err.matr == min(cv.err.matr), arr.ind = TRUE)
+  
+  
+  list_summary <- list()
+  list_summary[["lambda"]] <- my.lambda.vals
+  list_summary[["theta"]] <- my.theta.vals
+  
+  list_summary[["lmin"]] <- my.lambda.vals[min_indexes[1]]
+  list_summary[["tmin"]] <- my.theta.vals[min_indexes[2]]
+  list_summary[["cv.err.matr"]] = cv.err.matr
+  
+  rm(cv.err.matr)
+  rm(temp.err.array)
   gc()
   
+  # add all to list
+  
+  return(list_summary)
 }
+
 ```
 
 
+
+#### No interaction
+
+```{r, warning=FALSE, eval = bool_execute_heavy_chunks}
+models_summary$lasso.negbin.noint = LASSO_NegBin_Offset_Cv(cv.sets = month.noint.fit.val.k4.sets,
+                                                        my.lambda.vals = exp(seq(-3, 5, 0.2)) %>% sort(decreasing = TRUE),
+                                                        my.theta.vals = seq(1e-5, 3, length = 20),
+                                                        my.response.name = "count",
+                                                        my.offset_constant_train = 9, # 9 months
+                                                        my.offset_constant_test = 3, # 12 - 9 months
+                                                        my.offset_var_name = "Pop1")
+```
+
 ```{r}
-plot(log(lasso.lambda.errs[,1]), lasso.lambda.errs[,2],
-     xlab = "log lambda",
-     ylab = "RMSE",
-     main = "LASSO Neg Bin CV error",
-     pch = 16,
-     type = "b")
 
-points(log(lasso.lambda.errs[,1]),
-       lasso.lambda.errs[,2] + lasso.lambda.errs[,3], type = "l", col = "red")
-points(log(lasso.lambda.errs[,1]), lasso.lambda.errs[,2] - lasso.lambda.errs[,3], type = "l", col = "red")
+TwoParErrPlot(model_list = models_summary$lasso.negbin.noint,
+              row_par_name = "lambda",
+              col_par_name = "theta",
+              cv_err_matr_name = "cv.err.matr",
+              row_par_min_name = "lmin",
+              col_par_min_name = "tmin",
+              my.main = "LASSO Negative Binomial no interaction Cv error contour",
+              my.xlab = "log lambda",
+              my.ylab = "theta")
+```
 
-lasso.min.index = which.min(lasso.lambda.errs[,2])
-lasso.lmin = lasso.lambda.errs[lasso.min.index,1]
+#### Yes interaction
+```{r, warning=FALSE, eval = bool_execute_heavy_chunks}
+models_summary$lasso.negbin = LASSO_NegBin_Offset_Cv(cv.sets = month.fit.val.k4.sets,
+                                                        my.lambda.vals = exp(seq(-10, 2, 0.2)) %>% sort(decreasing = TRUE),
+                                                        my.theta.vals = seq(1e-5, 20, length = 20),
+                                                        my.response.name = "count",
+                                                        my.offset_constant_train = 9, # 9 months
+                                                        my.offset_constant_test = 3, # 12 - 9 months
+                                                        my.offset_var_name = "Pop1")
+```
 
-lasso.1se.index = which.max(lasso.lambda.errs[,2] <= (lasso.lambda.errs[lasso.min.index,2] +
-                                                     lasso.lambda.errs[lasso.min.index,3]))
-lasso.l1se = lasso.lambda.errs[lasso.1se.index,1]
+```{r}
 
-# min
-abline(v = log(lasso.lmin), lty = 2, col = "blue", lwd = 2)
+TwoParErrPlot(model_list = models_summary$lasso.negbin,
+              row_par_name = "lambda",
+              col_par_name = "theta",
+              cv_err_matr_name = "cv.err.matr",
+              row_par_min_name = "lmin",
+              col_par_min_name = "tmin",
+              my.main = "LASSO Negative Binomial Cv error contour",
+              my.xlab = "log lambda",
+              my.ylab = "theta")
+```
 
-# 1.se min
-abline(v = log(lasso.l1se),
-       lty = 2, col = "purple", lwd = 2)
-
-
-legend("topleft",
-       legend = c("lambda min", "lambda 1se", "se"),
-       col = c("blue", "purple", "red"),
-       lwd = c(2, 2, 1),
-       lty = c(2, 2, 1))
+```{r}
+# backup to save key model info
+save(models_summary, file = "arrests_nta_2010_models_summary.Rdata")
 ```
 
 
