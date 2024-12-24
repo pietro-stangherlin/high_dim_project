@@ -14,6 +14,8 @@ gc()
 
 library(tidyverse)
 library(Matrix)
+library(glmnet)
+library(ncvreg)
 library(viridis)
 library(lattice)
 ```
@@ -23,14 +25,12 @@ library(lattice)
 # assuming the models are been loaded from a RData file before.
 # IMPORTANT: in order to reproduce the result set bool_execute_heavy_chunks = TRUE
 
-bool_execute_heavy_chunks = FALSE
+bool_execute_heavy_chunks = TRUE
 
 # require loading models_summary list
 if(!bool_execute_heavy_chunks){
   load("arrests_nta_2010_models_summary.Rdata")
-}
-
-else{
+} else{
   # store each model useful information:
   # validation error and beta for best lambda
   models_summary = list()
@@ -268,53 +268,68 @@ my.df.year.grouped = my.df %>%
 my.df.year.grouped$y = log(my.df.year.grouped$count / my.df.year.grouped$Pop1)
 ```
 
-
 ```{r}
-my.df.year.grouped.matrix = sparse.model.matrix(FORMULA.NO.KY_CD.matrix,
-                                                my.df.year.grouped)
-```
-
-
-```{r}
-
-FORMULA.NO.KY_CD.matrix = as.formula("y ~. -1 - count - Pop1 + 
-                            NTA2020:LAW_CAT_CD +
-                            NTA2020:AGE_GROUP +
-                            NTA2020:PERP_SEX +
-                            NTA2020:PERP_RACE")
 
 FORMULA.NO.KY_CD = as.formula("y ~. -1 -Pop1 - count + 
                             NTA2020:LAW_CAT_CD +
                             NTA2020:AGE_GROUP +
                             NTA2020:PERP_SEX +
                             NTA2020:PERP_RACE")
+
+FORMULA.NO.INTERACTIONS = as.formula("y ~. -1 -Pop1 - count")
 ```
 
-Error functions
+
 ```{r}
+my.df.year.grouped.matrix = sparse.model.matrix(FORMULA.NO.KY_CD,
+                                                my.df.year.grouped)
+```
+
+
+```{r}
+# error functions
 RMSEfun = function(true_vals, pred_vals){
   sqrt(mean( (true_vals - pred_vals)^2 ))
 }
 ```
 
 
-
-Model matrices: omit KY_CD variables due to computational issues.
-Make a list of fit and validation sets:
-
-```{r}
-# function to write
-
-# MakeCVSets = function(original_df, )
-
-```
-
-
 ```{r, warning=FALSE, message=FALSE}
+
+# Model matrices: omit KY_CD variables due to computational issues.
+# Make a list of fit and validation sets:
 
 library(dplyr)
 library(Matrix)
 
+# NO Interaction
+month.noint.fit.val.k4.sets = list()
+
+for (i in 1:nrow(month_sets_ind$k4)){
+  # make sublists
+  month.noint.fit.val.k4.sets[[i]] = list(train = list(y = NA,model_matrix = NA),
+                                    test = list(y = NA,model_matrix = NA))
+  
+  # populate the sublists
+  # keep also the all df
+  month.noint.fit.val.k4.sets[[i]]$train$df = GroupByMONTHSets(mydf = my.df,
+                       month_indexes = setdiff(1:12, month_sets_ind$k4[i,]))
+  
+  month.noint.fit.val.k4.sets[[i]]$train$model_matrix = sparse.model.matrix(FORMULA.NO.INTERACTIONS,
+                          data = month.fit.val.k4.sets[[i]]$train$df)
+  
+  
+  month.noint.fit.val.k4.sets[[i]]$test$df = GroupByMONTHSets(mydf = my.df,
+                       month_indexes = month_sets_ind$k4[i,])
+  
+  month.noint.fit.val.k4.sets[[i]]$test$model_matrix = sparse.model.matrix(FORMULA.NO.INTERACTIONS,
+                          data = month.fit.val.k4.sets[[i]]$test$df)
+  gc()
+}
+
+
+
+# YES interaction 
 month.fit.val.k4.sets = list()
 
 for (i in 1:nrow(month_sets_ind$k4)){
@@ -327,14 +342,14 @@ for (i in 1:nrow(month_sets_ind$k4)){
   month.fit.val.k4.sets[[i]]$train$df = GroupByMONTHSets(mydf = my.df,
                        month_indexes = setdiff(1:12, month_sets_ind$k4[i,]))
   
-  month.fit.val.k4.sets[[i]]$train$model_matrix = sparse.model.matrix(FORMULA.NO.KY_CD.matrix,
+  month.fit.val.k4.sets[[i]]$train$model_matrix = sparse.model.matrix(FORMULA.NO.KY_CD,
                           data = month.fit.val.k4.sets[[i]]$train$df)
   
   
   month.fit.val.k4.sets[[i]]$test$df = GroupByMONTHSets(mydf = my.df,
                        month_indexes = month_sets_ind$k4[i,])
   
-  month.fit.val.k4.sets[[i]]$test$model_matrix = sparse.model.matrix(FORMULA.NO.KY_CD.matrix,
+  month.fit.val.k4.sets[[i]]$test$model_matrix = sparse.model.matrix(FORMULA.NO.KY_CD,
                           data = month.fit.val.k4.sets[[i]]$test$df)
   gc()
 }
@@ -348,58 +363,58 @@ The simplest assumption is to assume a linear (monotone) trend of the response a
 ### LASSO
 
 ```{r}
-library(glmnet)
-
-
-
-# first compute a lambda grid on all grouped dataset
-
-lasso.fit.all = glmnet(x = my.df.year.grouped.matrix,
-                 y = my.df.year.grouped$y,
-                 alpha = 1)
-
-models_summary$lasso = list()
-models_summary$lasso$lambda_vals = exp(seq(-13, -6, 0.1)) %>% sort(decreasing = T)
-
-temp.err.matr = matrix(NA, 
-                      nrow = length(models_summary$lasso$lambda_vals),
-                      ncol = nrow(month_sets_ind$k4))
-
-
-for (i in 1:dim(temp.err.matr)[2]){
-  temp.fit = glmnet(x = month.fit.val.k4.sets[[i]]$train$model_matrix,
-                 y = month.fit.val.k4.sets[[i]]$train$df$y,
-                 alpha = 1,
-                 lambda = models_summary$lasso$lambda_vals)
+# general purpuose lasso CV function
+Lasso_CV <- function(cv_sets,
+                                  my.lambda_vals) {
   
-  pred.fit = predict.glmnet(temp.fit,
-                              newx = month.fit.val.k4.sets[[i]]$test$model_matrix)
+  temp_err_matr <- matrix(NA, 
+                          nrow = length(my.lambda_vals),
+                          ncol = length(cv_sets))
   
-  temp.err.matr[,i] = apply(pred.fit, 2,
-                                  function(col) RMSEfun(true_vals = exp(month.fit.val.k4.sets[[i]]$test$df$y),
-                                                        pred_vals = exp(col)))
+  for (i in 1:dim(temp_err_matr)[2]) {
+    temp_fit <- glmnet(x = cv_sets[[i]]$train$model_matrix,
+                       y = cv_sets[[i]]$train$df$y,
+                       alpha = 1,
+                       lambda = my.lambda_vals)
+    
+    pred_fit <- predict(temp_fit,
+                        newx = cv_sets[[i]]$test$model_matrix)
+    
+    temp_err_matr[, i] <- apply(pred_fit, 2,
+                                function(col) RMSEfun(true_vals = exp(cv_sets[[i]]$test$df$y),
+                                                      pred_vals = exp(col)))
+    
+    rm(temp_fit)
+    rm(pred_fit)
+    gc()
+  }
   
-  rm(temp.fit)
-  rm(pred.fit)
+  # Compute error matrix and lambda min and 1se
+  cv_err_matr <- cbind(apply(temp_err_matr, 1, mean),
+                                    apply(temp_err_matr, 1, sd) / ncol(temp_err_matr)) %>% as.data.frame()
+  
+  colnames(cv_err_matr) <- c("cv.err", "cv.se")
+  
+  lmin_index <- which.min(cv_err_matr$cv.err)
+  
+  l1se_index <- which.max(cv_err_matr[,"cv.err"] <= (cv_err_matr[lmin_index,"cv.err"] + cv_err_matr[lmin_index,"cv.se"]))
+  
+  list_summary <- list()
+  list_summary[["lambda"]] <- my.lambda_vals
+  
+  list_summary[["lmin"]] <- my.lambda_vals[lmin_index]
+  list_summary[["l1se"]] <- my.lambda_vals[l1se_index]
+  list_summary[["cv.err.matr"]] = cv_err_matr
+  
+  rm(cv_err_matr)
+  rm(temp_err_matr)
   gc()
   
+  # add all to list
+  
+  return(list_summary)
 }
 
-# compute error matrix and lambda min and 1se
-models_summary$lasso$cv.err.matr = cbind(models_summary$lasso$lambda_vals,
-                          apply(temp.err.matr,1,mean),
-                          apply(temp.err.matr,1,sd)/ncol(temp.err.matr)) %>% as.data.frame()
-
-colnames(models_summary$lasso$cv.err.matr) = c("lambda", "cv.err", "cv.se")
-
-models_summary$lasso$lmin.index = which.min(models_summary$lasso$cv.err.matr$cv.err)
-
-models_summary$lasso$l1se.index = which.max(models_summary$lasso$cv.err.matr$cv.err <=
-                                              (models_summary$lasso$cv.err.matr$cv.err[models_summary$lasso$lmin.index] +
-                                              models_summary$lasso$cv.err.matr$cv.se[models_summary$lasso$lmin.index]))
-
-models_summary$lasso$lmin = models_summary$lasso$cv.err.matr$lambda[models_summary$lasso$lmin.index]
-models_summary$lasso$l1se = models_summary$lasso$cv.err.matr$lambda[models_summary$lasso$l1se.index]
 ```
 
 
@@ -439,11 +454,38 @@ PlotOneDim = function(x, y, se,
 }
 
 ```
+#### No interactions
 
+```{r}
+models_summary$lasso.noint <- Lasso_CV(month.noint.fit.val.k4.sets,
+                                        my.lambda_vals = exp(seq(-17, -6, 0.1)) %>% sort(decreasing = T))
+```
 
 
 ```{r}
-PlotOneDim(x = log(models_summary$lasso$cv.err.matr$lambda),
+PlotOneDim(x = log(models_summary$lasso.noint$lambda),
+           y = models_summary$lasso.noint$cv.err.matr[,"cv.err"],
+           se = models_summary$lasso.noint$cv.err.matr[,"cv.se"],
+           x.min = log(models_summary$lasso.noint$lmin),
+           x.1se = log(models_summary$lasso.noint$l1se),
+           xlab = "log lambda",
+           ylab = "CV error",
+           main = "LASSO no interactions CV error",
+          min.leg = "lambda min",
+           onese.leg = "lambda 1se")
+```
+
+
+
+#### Yes interactions 
+
+```{r}
+models_summary$lasso <- Lasso_CV(month.fit.val.k4.sets,
+                                        my.lambda_vals = exp(seq(-13, -6, 0.1)) %>% sort(decreasing = T))
+```
+
+```{r}
+PlotOneDim(x = log(models_summary$lasso$lambda),
            y = models_summary$lasso$cv.err.matr$cv.err,
            se = models_summary$lasso$cv.err.matr$cv.se,
            x.min = log(models_summary$lasso$lmin),
@@ -468,11 +510,109 @@ abline(v = log(models_summary$lasso$l1se), col = "purple", lty = 2, lwd = 2)
 
 ### Elasticnet
 
+```{r}
+# general purpuose elasticnet CV function
+Elastic_Cv <- function(cv.sets,
+                       my.lambda.vals, # decreasing sorted
+                       my.alpha.vals) {
+  
+  temp.err.array <- array(NA,
+                           dim = c(length(my.lambda.vals),
+                                   length(my.alpha.vals),
+                                   length(cv.sets)))
+  # cycle over cv sets
+  for (k in 1:length(cv.sets)) {
+    
+    # cycle over alpha values
+    for(j in 1:length(my.alpha.vals)){
+      
+    temp_fit <- glmnet(x = cv.sets[[k]]$train$model_matrix,
+                       y = cv.sets[[k]]$train$df$y,
+                       alpha = my.alpha.vals[j],
+                       lambda = my.lambda.vals)
+    
+    pred_fit <- predict(temp_fit,
+                        newx = cv.sets[[k]]$test$model_matrix)
+    
+    temp.err.array[,j,k] <- apply(pred_fit, 2,
+                                function(col) RMSEfun(true_vals = exp(cv.sets[[k]]$test$df$y),
+                                                      pred_vals = exp(col)))
+    
+    rm(temp_fit)
+    rm(pred_fit)
+    gc()
+      
+    }
+    
+  }
+  
+  # Compute error matrix
+  # rows: lambda
+  # cols: alpha
+  cv.err.matr <- cbind(apply(temp.err.array, c(1,2), mean),
+                                    apply(temp.err.array, 1, sd) / ncol(temp.err.array)) %>% as.data.frame()
+  
+  # min error lambda and alpha indexes
+  min_indexes = which(cv.err.matr == min(cv.err.matr), arr.ind = TRUE)
+  
+  list_summary <- list()
+  list_summary[["lambda"]] <- my.lambda.vals
+  list_summary[["alpha"]] <- my.alpha.vals
+  
+  list_summary[["lmin"]] <- my.lambda.vals[min_indexes[1]]
+  list_summary[["amin"]] <- my.alpha.vals[min_indexes[2]]
+  list_summary[["cv.err.matr"]] = cv.err.matr
+  
+  rm(cv.err.matr)
+  rm(temp.err.array)
+  gc()
+  
+  # add all to list
+  
+  return(list_summary)
+}
+
+```
+
+
+#### No Interaction
+
+```{r}
+models_summary$elasticnet.noint = Elastic_Cv(cv.sets = month.noint.fit.val.k4.sets,
+                                             my.lambda.vals = exp(seq(-13, -8, 0.1)) %>% sort(decreasing = TRUE),
+                                             my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 20))
+```
+
+```{r}
+# sort rows in z by increasing order to match that of lambda_vals (as required by filled.contours)
+filled.contour(x = log(models_summary$elasticnet.noint$lambda) %>% sort(),
+               y = models_summary$elasticnet.noint$alpha,
+               z = models_summary$elasticne.noint$cv.err.matrix[(1:length(models_summary$elasticnet.noint$lambda)) %>% sort(decreasing = TRUE),],
+               main = "Elasticnet no interaction Cv error contour",
+               xlab = "log lambda",
+               ylab = "alpha",
+               color.palette = viridis::viridis,
+               nlevels = 200,
+               plot.axes = { 
+                 axis(1)
+                 axis(2)
+                 points(log(models_summary$elasticnet.noint$lmin), models_summary$elasticnet.noint$amin,
+                            col = "red", pch = 19, cex = 1.5)})
+
+legend("topleft",
+       legend = c("min err"),
+       col = "red",
+       text.col = "red",
+       lty = 1,
+       bty = "n")
+```
+
+#### Yes Interaction
 Selecting a grid of 20 $\alpha \in (0,1)$.
 ```{r, eval = bool_execute_heavy_chunks}
 models_summary$elasticnet = list()
 
-models_summary$elasticnet$lambda_vals =  exp(seq(-13, -8, 0.1)) # glmnet sorts by decreasing order
+models_summary$elasticnet$lambda_vals =  exp(seq(-13, -8, 0.1)) %>% sort(decreasing = TRUE) # glmnet sorts by decreasing order
 models_summary$elasticnet$alpha_vals = seq(1e-5, 1 - 1e-5, length = 20)
 
 # make cv error matrix
@@ -511,10 +651,6 @@ for(j in 1:dim(temp.err.array)[2]){
 # average error over all cv folds
 models_summary$elasticnet$cv.err.matrix = apply(temp.err.array, c(1,2), mean)
 
-# due to plotting reasons: invert the rows order
-# so that the lambdas are in increasing order
-models_summary$elasticnet$cv.err.matrix = models_summary$elasticnet$cv.err.matrix[rev(seq_len(nrow(models_summary$elasticnet$cv.err.matrix))), ]
-
 models_summary$elasticnet$cv.err.min = min(models_summary$elasticnet$cv.err.matrix)
 
 models_summary$elasticnet$err.min.indexes.lambda.alpha = which(models_summary$elasticnet$cv.err.matrix ==
@@ -528,9 +664,10 @@ models_summary$elasticnet$amin = models_summary$elasticnet$alpha_vals[models_sum
 ```
 
 ```{r}
-filled.contour(x = log(models_summary$elasticnet$lambda_vals),
+# sort rows in z by increasing order to match that of lambda_vals (as required by filled.contours)
+filled.contour(x = log(models_summary$elasticnet$lambda_vals) %>% sort(),
                y = models_summary$elasticnet$alpha_vals,
-               z = models_summary$elasticnet$cv.err.matrix,
+               z = models_summary$elasticnet$cv.err.matrix[(1:nrow(models_summary$elasticnet$cv.err.matrix)) %>% sort(decreasing = TRUE),],
                main = "Elasticnet Cv error contour",
                xlab = "log lambda",
                ylab = "alpha",
@@ -601,10 +738,6 @@ for(j in 1:dim(temp.err.array)[2]){
 # average error over all cv folds
 models_summary$scad$cv.err.matrix = apply(temp.err.array, c(1,2), mean)
 
-# due to plotting reasons: invert the rows order
-# so that the lambdas are in increasing order
-models_summary$scad$cv.err.matrix = models_summary$scad$cv.err.matrix[rev(seq_len(nrow(models_summary$scad$cv.err.matrix))), ]
-
 models_summary$scad$cv.err.min = min(models_summary$scad$cv.err.matrix)
 
 models_summary$scad$err.min.indexes.lambda.gamma = which(models_summary$scad$cv.err.matrix ==
@@ -618,9 +751,11 @@ models_summary$scad$gmin = models_summary$scad$gamma_vals[models_summary$scad$er
 ```
 
 ```{r}
-filled.contour(x = log(models_summary$scad$lambda_vals),
+
+# the matrix rows order has to be inverted as well
+filled.contour(x = log(models_summary$scad$lambda_vals) %>% sort(), # already sorted above
                y = models_summary$scad$gamma_vals,
-               z = models_summary$scad$cv.err.matrix,
+               z = models_summary$scad$cv.err.matrix[(1:nrow(models_summary$scad$cv.err.matrix)) %>% sort(decreasing = TRUE),],
                main = "SCAD Cv error contour",
                xlab = "log lambda",
                ylab = "gamma",
@@ -642,7 +777,7 @@ legend("topleft",
 ```
 Check if the estimate is in the non convex region.
 
-```{r,  warning=FALSE}
+```{r,  warning=FALSE, eval = bool_execute_heavy_chunks}
 scad.fit.all = ncvreg(X = as.matrix(my.df.year.grouped.matrix),
                  y = my.df.year.grouped$y,
                  gamma = models_summary$scad$gmin,
@@ -658,7 +793,6 @@ abline(v = log(models_summary$scad$lmin), col = "blue", lty = 2, lwd = 2)
 ### MCP
 
 ```{r, warning = FALSE, eval = bool_execute_heavy_chunks}
-library(ncvreg)
 
 models_summary$mcp = list()
 
@@ -703,10 +837,6 @@ for(j in 1:dim(temp.err.array)[2]){
 # average error over all cv folds
 models_summary$mcp$cv.err.matrix = apply(temp.err.array, c(1,2), mean)
 
-# due to plotting reasons: invert the rows order
-# so that the lambdas are in increasing order
-models_summary$mcp$cv.err.matrix = models_summary$mcp$cv.err.matrix[rev(seq_len(nrow(models_summary$mcp$cv.err.matrix))), ]
-
 models_summary$mcp$cv.err.min = min(models_summary$mcp$cv.err.matrix)
 
 models_summary$mcp$err.min.indexes.lambda.gamma = which(models_summary$mcp$cv.err.matrix ==
@@ -720,9 +850,9 @@ models_summary$mcp$gmin = models_summary$mcp$gamma_vals[models_summary$mcp$err.m
 ```
 
 ```{r}
-filled.contour(x = log(models_summary$mcp$lambda_vals),
+filled.contour(x = log(models_summary$mcp$lambda_vals) %>% sort(),
                y = models_summary$mcp$gamma_vals,
-               z = models_summary$mcp$cv.err.matrix,
+               z = models_summary$mcp$cv.err.matrix[(1:nrow(models_summary$mcp$cv.err.matrix)) %>% sort(decreasing = TRUE),],
                main = "MCP Cv error contour",
                xlab = "log lambda",
                ylab = "gamma",
@@ -741,16 +871,16 @@ legend("topleft",
        lty = 1,
        bty = "n")
 ```
-Check if the estimate is in the non convex region.
+The minimum is on the regulation parameters border, in particular $\gamma$ is close to one: the optimal solution seems not that reliable.
 
-```{r}
+```{r, eval = bool_execute_heavy_chunks}
 mcp.fit.all = ncvreg(X = as.matrix(my.df.year.grouped.matrix),
                  y = my.df.year.grouped$y,
                  gamma = models_summary$mcp$gmin,
-                 lambda = models_summary$mcp$lambda_vals %>% sort(decreasing = TRUE),
+                 lambda = models_summary$mcp$lambda_vals,
                  penalty = "MCP")
 
-plot(mcp.fit.all)
+plot(mcp.fit.all, log.l = TRUE)
 abline(v = log(models_summary$mcp$gmin), col = "blue", lty = 2, lwd = 2)
 
 ```
