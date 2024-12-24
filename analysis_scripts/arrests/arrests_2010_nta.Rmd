@@ -88,7 +88,7 @@ A reasonable response variable would be the count of arrests divided by the loca
 To get an idea of the dataset used on which models are tested a
 ```{r}
 year_grouped = my.df %>%
-  select(-MONTH) %>% 
+  dplyr::select(-"MONTH") %>% 
   group_by_all() %>% 
   summarise(count = n())
 
@@ -222,7 +222,7 @@ Choose k: the number of validation sets (example k = 4) each validation set is m
 GroupByMONTHSets = function(mydf, month_indexes){
   month_grouped = mydf %>%
     filter(MONTH %in% month_indexes) %>% 
-    select(-MONTH) %>% 
+    dplyr::select(-MONTH) %>% 
   group_by_all() %>% 
   summarise(count = n())
   
@@ -260,7 +260,7 @@ $y = \log(\text{count} / \text{population})$ where each count is the events coun
 my.df$KY_CD = NULL
 
 my.df.year.grouped = my.df %>%
-  select(-MONTH) %>% 
+  dplyr::select(-MONTH) %>% 
   group_by_all() %>% 
   summarise(count = n())
 
@@ -317,14 +317,14 @@ for (i in 1:nrow(month_sets_ind$k4)){
                        month_indexes = setdiff(1:12, month_sets_ind$k4[i,]))
   
   month.noint.fit.val.k4.sets[[i]]$train$model_matrix = sparse.model.matrix(FORMULA.NO.INTERACTIONS,
-                          data = month.fit.val.k4.sets[[i]]$train$df)
+                          data = month.noint.fit.val.k4.sets[[i]]$train$df)
   
   
   month.noint.fit.val.k4.sets[[i]]$test$df = GroupByMONTHSets(mydf = my.df,
                        month_indexes = month_sets_ind$k4[i,])
   
   month.noint.fit.val.k4.sets[[i]]$test$model_matrix = sparse.model.matrix(FORMULA.NO.INTERACTIONS,
-                          data = month.fit.val.k4.sets[[i]]$test$df)
+                          data = month.noint.fit.val.k4.sets[[i]]$test$df)
   gc()
 }
 
@@ -498,16 +498,6 @@ PlotOneDim(x = log(models_summary$lasso$lambda),
            onese.leg = "lambda 1se")
 ```
 Best $lambda$ is close to zero, so the best solution seems OLS classical solution.
-
-Check coefficients paths
-
-```{r}
-plot(lasso.fit.all, xvar = "lambda", main = "LASSO beta path")
-abline(v = log(models_summary$lasso$lmin), col = "blue", lty = 2, lwd = 2)
-abline(v = log(models_summary$lasso$l1se), col = "purple", lty = 2, lwd = 2)
-```
-
-
 
 ### Elasticnet
 
@@ -782,7 +772,6 @@ Check if the estimate is in the non convex region.
 scad.fit.all = ncvreg(X = as.matrix(my.df.year.grouped.matrix),
                  y = my.df.year.grouped$y,
                  gamma = models_summary$scad$gmin,
-                 lambda = models_summary$scad$lambda_vals,
                  penalty = "SCAD")
 
 plot(scad.fit.all, log.l = TRUE)
@@ -840,7 +829,6 @@ The minimum is on the regulation parameters border, in particular $\gamma$ is cl
 mcp.fit.all = ncvreg(X = as.matrix(my.df.year.grouped.matrix),
                  y = my.df.year.grouped$y,
                  gamma = models_summary$mcp$gmin,
-                 lambda = models_summary$mcp$lambda_vals,
                  penalty = "MCP")
 
 plot(mcp.fit.all, log.l = TRUE)
@@ -974,7 +962,7 @@ models_summary$lasso.poi = Lasso_Offset_CV(cv_sets = month.fit.val.k4.sets,
 
 
 ```{r}
-PlotOneDim(x = log(models_summary$lasso.poi$cv.err.matr$lambda),
+PlotOneDim(x = log(models_summary$lasso.poi$lambda),
            y = models_summary$lasso.poi$cv.err.matr$cv.err,
            se = models_summary$lasso.poi$cv.err.matr$cv.se,
            x.min = log(models_summary$lasso.poi$lmin),
@@ -1113,7 +1101,7 @@ TwoParErrPlot(model_list = models_summary$elasticnet.poi,
               cv_err_matr_name = "cv.err.matr",
               row_par_min_name = "lmin",
               col_par_min_name = "amin",
-              my.main = "Elasticnet Cv error contour",
+              my.main = "Elasticnet Poisson Cv error contour",
               my.xlab = "log lambda",
               my.ylab = "alpha")
 ```
