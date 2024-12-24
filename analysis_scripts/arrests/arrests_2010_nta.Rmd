@@ -25,7 +25,7 @@ library(lattice)
 # assuming the models are been loaded from a RData file before.
 # IMPORTANT: in order to reproduce the result set bool_execute_heavy_chunks = TRUE
 
-bool_execute_heavy_chunks = TRUE
+bool_execute_heavy_chunks = FALSE
 
 # require loading models_summary list
 if(!bool_execute_heavy_chunks){
@@ -950,7 +950,7 @@ PlotOneDim(x = log(models_summary$lasso.poi.noint$lambda),
 ```
 
 #### Yes interaction
-```{r, eval = bool_execute_heavy_chunks}
+```{r, eval = bool_execute_heavy_chunks, warning=FALSE}
 models_summary$lasso.poi = Lasso_Offset_CV(cv_sets = month.fit.val.k4.sets,
                                           my.lambda.vals = exp(seq(-15, 3, 0.1)) %>% sort(decreasing = TRUE),
                                           my.response.name = "count",
