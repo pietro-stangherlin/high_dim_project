@@ -520,6 +520,7 @@ Elastic_Cv <- function(cv.sets,
                            dim = c(length(my.lambda.vals),
                                    length(my.alpha.vals),
                                    length(cv.sets)))
+  
   # cycle over cv sets
   for (k in 1:length(cv.sets)) {
     
@@ -549,11 +550,13 @@ Elastic_Cv <- function(cv.sets,
   # Compute error matrix
   # rows: lambda
   # cols: alpha
-  cv.err.matr <- cbind(apply(temp.err.array, c(1,2), mean),
-                                    apply(temp.err.array, 1, sd) / ncol(temp.err.array)) %>% as.data.frame()
+  cv.err.matr <- apply(temp.err.array, c(1,2), mean)
   
   # min error lambda and alpha indexes
   min_indexes = which(cv.err.matr == min(cv.err.matr), arr.ind = TRUE)
+  
+  # debug
+  print(min_indexes)
   
   list_summary <- list()
   list_summary[["lambda"]] <- my.lambda.vals
@@ -579,15 +582,30 @@ Elastic_Cv <- function(cv.sets,
 
 ```{r}
 models_summary$elasticnet.noint = Elastic_Cv(cv.sets = month.noint.fit.val.k4.sets,
-                                             my.lambda.vals = exp(seq(-13, -8, 0.1)) %>% sort(decreasing = TRUE),
+                                             my.lambda.vals = exp(seq(-20, -8, 0.1)) %>% sort(decreasing = TRUE),
                                              my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 20))
 ```
 
 ```{r}
-# sort rows in z by increasing order to match that of lambda_vals (as required by filled.contours)
-filled.contour(x = log(models_summary$elasticnet.noint$lambda) %>% sort(),
-               y = models_summary$elasticnet.noint$alpha,
-               z = models_summary$elasticne.noint$cv.err.matrix[(1:length(models_summary$elasticnet.noint$lambda)) %>% sort(decreasing = TRUE),],
+# generic two parameters error plots
+# invert the rows order because filled.contour requires all axis values in ascending order
+# the first param is assumed to be lambda: it's sorted and the logarithm is taken
+TwoParErrPlot = function(model_list,
+                         row_par_name = "lambda",
+                         col_par_name = "alpha",
+                         cv_err_matr_name = "cv.err.matr",
+                         row_par_min_name = "lmin",
+                         col_par_min_name = "amin",
+                         my.main,
+                         my.xlab = "log lambda",
+                         my.ylab = "alpha"){
+  
+  n_row = length(model_list[[row_par_name]])
+  
+  # sort rows in z by increasing order to match that of lambda_vals (as required by filled.contours)
+filled.contour(x = log(model_list[[row_par_name]]) %>% sort(),
+               y = model_list[[col_par_name]],
+               z = model_list[[cv_err_matr_name]][(1:n_row) %>% sort(decreasing = TRUE),],
                main = "Elasticnet no interaction Cv error contour",
                xlab = "log lambda",
                ylab = "alpha",
@@ -596,7 +614,7 @@ filled.contour(x = log(models_summary$elasticnet.noint$lambda) %>% sort(),
                plot.axes = { 
                  axis(1)
                  axis(2)
-                 points(log(models_summary$elasticnet.noint$lmin), models_summary$elasticnet.noint$amin,
+                 points(log(model_list[[row_par_min_name]]), model_list[[col_par_min_name]],
                             col = "red", pch = 19, cex = 1.5)})
 
 legend("topleft",
@@ -605,175 +623,162 @@ legend("topleft",
        text.col = "red",
        lty = 1,
        bty = "n")
+}
+```
+
+
+```{r}
+
+TwoParErrPlot(model_list = models_summary$elasticnet.noint,
+              row_par_name = "lambda",
+              col_par_name = "alpha",
+              cv_err_matr_name = "cv.err.matr",
+              row_par_min_name = "lmin",
+              col_par_min_name = "amin",
+              my.main = "Elasticnet no interaction Cv error contour",
+              my.xlab = "log lambda",
+              my.ylab = "alpha")
 ```
 
 #### Yes Interaction
 Selecting a grid of 20 $\alpha \in (0,1)$.
 ```{r, eval = bool_execute_heavy_chunks}
-models_summary$elasticnet = list()
 
-models_summary$elasticnet$lambda_vals =  exp(seq(-13, -8, 0.1)) %>% sort(decreasing = TRUE) # glmnet sorts by decreasing order
-models_summary$elasticnet$alpha_vals = seq(1e-5, 1 - 1e-5, length = 20)
-
-# make cv error matrix
-temp.err.array = array(NA,
-                       dim = c(length(models_summary$elasticnet$lambda_vals),
-                               length(models_summary$elasticnet$alpha_vals),
-                               nrow(month_sets_ind$k4)))
-
-# cycle over cv sets
-for (k in 1:dim(temp.err.array)[3]){
-  
-  # iterate over alpha
-for(j in 1:dim(temp.err.array)[2]){
-
-  temp.fit = glmnet(x = month.fit.val.k4.sets[[k]]$train$model_matrix,
-                 y = month.fit.val.k4.sets[[k]]$train$df$y,
-                 alpha = models_summary$elasticnet$alpha_vals[j],
-                 lambda = models_summary$elasticnet$lambda_vals) # all lambda path
-  
-  pred.fit = predict.glmnet(temp.fit,
-                              newx = month.fit.val.k4.sets[[k]]$test$model_matrix)
-  
-  
-  temp.err.array[,j,k] = apply(pred.fit, 2,
-                                  function(col) RMSEfun(true_vals = exp(month.fit.val.k4.sets[[k]]$test$df$y),
-                                                        pred_vals = exp(col)))
-  
-  rm(temp.fit)
-  rm(pred.fit)
-  gc()
-  
-  }
-  
-}
-
-# average error over all cv folds
-models_summary$elasticnet$cv.err.matrix = apply(temp.err.array, c(1,2), mean)
-
-models_summary$elasticnet$cv.err.min = min(models_summary$elasticnet$cv.err.matrix)
-
-models_summary$elasticnet$err.min.indexes.lambda.alpha = which(models_summary$elasticnet$cv.err.matrix ==
-        models_summary$elasticnet$cv.err.min,
-      arr.ind = TRUE)
-
-models_summary$elasticnet$lmin = models_summary$elasticnet$lambda_vals[models_summary$elasticnet$err.min.indexes.lambda.alpha[1]]
-
-models_summary$elasticnet$amin = models_summary$elasticnet$alpha_vals[models_summary$elasticnet$err.min.indexes.lambda.alpha[2]]
-
+models_summary$elasticnet = Elastic_Cv(cv.sets = month.fit.val.k4.sets,
+                                             my.lambda.vals = exp(seq(-20, -8, 0.1)) %>% sort(decreasing = TRUE),
+                                             my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 20))
 ```
 
 ```{r}
-# sort rows in z by increasing order to match that of lambda_vals (as required by filled.contours)
-filled.contour(x = log(models_summary$elasticnet$lambda_vals) %>% sort(),
-               y = models_summary$elasticnet$alpha_vals,
-               z = models_summary$elasticnet$cv.err.matrix[(1:nrow(models_summary$elasticnet$cv.err.matrix)) %>% sort(decreasing = TRUE),],
-               main = "Elasticnet Cv error contour",
-               xlab = "log lambda",
-               ylab = "alpha",
-               color.palette = viridis::viridis,
-               nlevels = 200,
-               plot.axes = { 
-                 axis(1)
-                 axis(2)
-                 points(log(models_summary$elasticnet$lmin), models_summary$elasticnet$amin,
-                            col = "red", pch = 19, cex = 1.5)})
-
-legend("topleft",
-       legend = c("min err"),
-       col = "red",
-       text.col = "red",
-       lty = 1,
-       bty = "n")
+TwoParErrPlot(model_list = models_summary$elasticnet,
+              row_par_name = "lambda",
+              col_par_name = "alpha",
+              cv_err_matr_name = "cv.err.matr",
+              row_par_min_name = "lmin",
+              col_par_min_name = "amin",
+              my.main = "Elasticnet no interaction Cv error contour",
+              my.xlab = "log lambda",
+              my.ylab = "alpha")
 ```
 
 The best selected model is close to a ridge regression since $\alpha$ is close to zero.
 
 
 ### Scad
-
-```{r, warning = FALSE, eval = bool_execute_heavy_chunks}
-library(ncvreg)
-
-models_summary$scad = list()
-
-models_summary$scad$lambda_vals =  exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE)
-models_summary$scad$gamma_vals = seq(2+1e-05, 20, length = 20)
-
-# make cv error matrix
-temp.err.array = array(NA,
-                       dim = c(length(models_summary$scad$lambda_vals),
-                               length(models_summary$scad$gamma_vals),
-                               nrow(month_sets_ind$k4)))
-
-# cycle over cv sets
-for (k in 1:dim(temp.err.array)[3]){
+```{r}
+# general purpuose MCP or SCAD CV function
+NonConvex_Cv <- function(cv.sets,
+                       my.lambda.vals, # decreasing sorted
+                       my.gamma.vals,
+                       my.penalty = "MCP") {
   
-  # iterate over alpha
-for(j in 1:dim(temp.err.array)[2]){
+  temp.err.array <- array(NA,
+                           dim = c(length(my.lambda.vals),
+                                   length(my.gamma.vals),
+                                   length(cv.sets)))
   
-  # ncvreg doens't accept sparse matrices
-  temp.fit = ncvreg(X = as.matrix(month.fit.val.k4.sets[[k]]$train$model_matrix),
-                 y = month.fit.val.k4.sets[[k]]$train$df$y,
-                 gamma = models_summary$scad$gamma_vals[j],
-                 lambda = models_summary$scad$lambda_vals %>% sort(decreasing = T),
-                 penalty = "SCAD") # all lambda path
-  
-  pred.fit = predict(temp.fit,
-                     X = as.matrix(month.fit.val.k4.sets[[k]]$test$model_matrix))
-  
-  
-  temp.err.array[,j,k] = apply(pred.fit, 2,
-                                  function(col) RMSEfun(true_vals = exp(month.fit.val.k4.sets[[k]]$test$df$y),
-                                                        pred_vals = exp(col)))
-  
-  rm(temp.fit)
-  rm(pred.fit)
-  gc()
-  
+  # cycle over cv sets
+  for (k in 1:length(cv.sets)) {
+    
+    # cycle over alpha values
+    for(j in 1:length(my.gamma.vals)){
+      
+    temp_fit <- ncvreg(X = as.matrix(cv.sets[[k]]$train$model_matrix),
+                       y = cv.sets[[k]]$train$df$y,
+                       gamma = my.gamma.vals[j],
+                       lambda = my.lambda.vals,
+                       penalty = my.penalty)
+    
+    pred_fit <- predict(temp_fit,
+                        X = as.matrix(cv.sets[[k]]$test$model_matrix))
+    
+    temp.err.array[,j,k] <- apply(pred_fit, 2,
+                                function(col) RMSEfun(true_vals = exp(cv.sets[[k]]$test$df$y),
+                                                      pred_vals = exp(col)))
+    
+    rm(temp_fit)
+    rm(pred_fit)
+    gc()
+      
+    }
+    
   }
   
+  # Compute error matrix
+  # rows: lambda
+  # cols: alpha
+  cv.err.matr <- apply(temp.err.array, c(1,2), mean)
+  
+  # min error lambda and alpha indexes
+  min_indexes = which(cv.err.matr == min(cv.err.matr), arr.ind = TRUE)
+  
+  # debug
+  print(min_indexes)
+  
+  list_summary <- list()
+  list_summary[["lambda"]] <- my.lambda.vals
+  list_summary[["gamma"]] <- my.gamma.vals
+  
+  list_summary[["lmin"]] <- my.lambda.vals[min_indexes[1]]
+  list_summary[["gmin"]] <- my.gamma.vals[min_indexes[2]]
+  list_summary[["cv.err.matr"]] = cv.err.matr
+  
+  rm(cv.err.matr)
+  rm(temp.err.array)
+  gc()
+  
+  # add all to list
+  
+  return(list_summary)
 }
 
-# average error over all cv folds
-models_summary$scad$cv.err.matrix = apply(temp.err.array, c(1,2), mean)
+```
 
-models_summary$scad$cv.err.min = min(models_summary$scad$cv.err.matrix)
+#### No interaction
 
-models_summary$scad$err.min.indexes.lambda.gamma = which(models_summary$scad$cv.err.matrix ==
-        models_summary$scad$cv.err.min,
-      arr.ind = TRUE)
+```{r, eval = bool_execute_heavy_chunks}
+models_summary$scad.noint = NonConvex_Cv(cv.sets = month.noint.fit.val.k4.sets,
+                                             my.lambda.vals = exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE),
+                                             my.gamma.vals = seq(2+1e-05, 20, length = 20),
+                                         my.penalty = "SCAD")
+```
 
-models_summary$scad$lmin = models_summary$scad$lambda_vals[models_summary$scad$err.min.indexes.lambda.gamma[1]]
+```{r}
 
-models_summary$scad$gmin = models_summary$scad$gamma_vals[models_summary$scad$err.min.indexes.lambda.gamma[2]]
+TwoParErrPlot(model_list = models_summary$scad.noint,
+              row_par_name = "lambda",
+              col_par_name = "gamma",
+              cv_err_matr_name = "cv.err.matr",
+              row_par_min_name = "lmin",
+              col_par_min_name = "gmin",
+              my.main = "SCAD no interaction Cv error contour",
+              my.xlab = "log lambda",
+              my.ylab = "gamma")
+
+```
+
+
+#### Yes Interaction
+
+```{r, warning = FALSE, eval = bool_execute_heavy_chunks}
+models_summary$scad = NonConvex_Cv(cv.sets = month.fit.val.k4.sets,
+                                             my.lambda.vals = exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE),
+                                             my.gamma.vals = seq(2+1e-05, 20, length = 20),
+                                         my.penalty = "SCAD")
 
 ```
 
 ```{r}
 
-# the matrix rows order has to be inverted as well
-filled.contour(x = log(models_summary$scad$lambda_vals) %>% sort(), # already sorted above
-               y = models_summary$scad$gamma_vals,
-               z = models_summary$scad$cv.err.matrix[(1:nrow(models_summary$scad$cv.err.matrix)) %>% sort(decreasing = TRUE),],
-               main = "SCAD Cv error contour",
-               xlab = "log lambda",
-               ylab = "gamma",
-               color.palette = viridis::viridis,
-               nlevels = 200,
-               plot.axes = { 
-                 axis(1)
-                 axis(2)
-                 points(log(models_summary$scad$lmin), models_summary$scad$gmin,
-                            col = "red", pch = 19, cex = 1.5)})
-
-
-legend("topleft",
-       legend = c("min err"),
-       col = "red",
-       text.col = "red",
-       lty = 1,
-       bty = "n")
+TwoParErrPlot(model_list = models_summary$scad,
+              row_par_name = "lambda",
+              col_par_name = "gamma",
+              cv_err_matr_name = "cv.err.matr",
+              row_par_min_name = "lmin",
+              col_par_min_name = "gmin",
+              my.main = "SCAD interaction Cv error contour",
+              my.xlab = "log lambda",
+              my.ylab = "gamma")
 ```
 Check if the estimate is in the non convex region.
 
@@ -792,84 +797,46 @@ abline(v = log(models_summary$scad$lmin), col = "blue", lty = 2, lwd = 2)
 
 ### MCP
 
+#### No interaction
+```{r, eval = bool_execute_heavy_chunks}
+models_summary$mcp.noint = NonConvex_Cv(cv.sets = month.noint.fit.val.k4.sets,
+                                             my.lambda.vals = exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE),
+                                             my.gamma.vals = seq(1+1e-05, 20, length = 20),
+                                         my.penalty = "MCP")
+```
+
+
+```{r}
+TwoParErrPlot(model_list = models_summary$mcp.noint,
+              row_par_name = "lambda",
+              col_par_name = "gamma",
+              cv_err_matr_name = "cv.err.matr",
+              row_par_min_name = "lmin",
+              col_par_min_name = "gmin",
+              my.main = "MCP no interaction Cv error contour",
+              my.xlab = "log lambda",
+              my.ylab = "gamma")
+```
+
+
+#### Yes interaction
 ```{r, warning = FALSE, eval = bool_execute_heavy_chunks}
-
-models_summary$mcp = list()
-
-models_summary$mcp$lambda_vals =  exp(seq(-20, 5, 0.5)) %>% sort(decreasing = TRUE)
-models_summary$mcp$gamma_vals = seq(1+1e-05, 20, length = 20)
-
-# make cv error matrix
-temp.err.array = array(NA,
-                       dim = c(length(models_summary$mcp$lambda_vals),
-                               length(models_summary$mcp$gamma_vals),
-                               nrow(month_sets_ind$k4)))
-
-# cycle over cv sets
-for (k in 1:dim(temp.err.array)[3]){
-  
-  # iterate over alpha
-for(j in 1:dim(temp.err.array)[2]){
-  
-  # ncvreg doens't accept sparse matrices
-  temp.fit = ncvreg(X = as.matrix(month.fit.val.k4.sets[[k]]$train$model_matrix),
-                 y = month.fit.val.k4.sets[[k]]$train$df$y,
-                 gamma = models_summary$mcp$gamma_vals[j],
-                 lambda = models_summary$mcp$lambda_vals,
-                 penalty = "MCP") # all lambda path
-  
-  pred.fit = predict(temp.fit,
-                     X = as.matrix(month.fit.val.k4.sets[[k]]$test$model_matrix))
-  
-  
-  temp.err.array[,j,k] = apply(pred.fit, 2,
-                                  function(col) RMSEfun(true_vals = exp(month.fit.val.k4.sets[[k]]$test$df$y),
-                                                        pred_vals = exp(col)))
-  
-  rm(temp.fit)
-  rm(pred.fit)
-  gc()
-  
-  }
-  
-}
-
-# average error over all cv folds
-models_summary$mcp$cv.err.matrix = apply(temp.err.array, c(1,2), mean)
-
-models_summary$mcp$cv.err.min = min(models_summary$mcp$cv.err.matrix)
-
-models_summary$mcp$err.min.indexes.lambda.gamma = which(models_summary$mcp$cv.err.matrix ==
-        models_summary$mcp$cv.err.min,
-      arr.ind = TRUE)
-
-models_summary$mcp$lmin = models_summary$mcp$lambda_vals[models_summary$mcp$err.min.indexes.lambda.gamma[1]]
-
-models_summary$mcp$gmin = models_summary$mcp$gamma_vals[models_summary$mcp$err.min.indexes.lambda.gamma[2]]
-
+models_summary$mcp = NonConvex_Cv(cv.sets = month.fit.val.k4.sets,
+                                             my.lambda.vals = exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE),
+                                             my.gamma.vals = seq(1+1e-05, 20, length = 20),
+                                         my.penalty = "MCP")
 ```
 
 ```{r}
-filled.contour(x = log(models_summary$mcp$lambda_vals) %>% sort(),
-               y = models_summary$mcp$gamma_vals,
-               z = models_summary$mcp$cv.err.matrix[(1:nrow(models_summary$mcp$cv.err.matrix)) %>% sort(decreasing = TRUE),],
-               main = "MCP Cv error contour",
-               xlab = "log lambda",
-               ylab = "gamma",
-               color.palette = viridis::viridis,
-               nlevels = 200,
-                plot.axes = { 
-                 axis(1)
-                 axis(2)
-                 points(log(models_summary$mcp$lmin), models_summary$mcp$gmin,
-                            col = "red", pch = 19, cex = 1.5)})
-
-legend("topleft",
-       legend = c("min err"),
-       col = "red",
-       text.col = "red",
-       lty = 1,
-       bty = "n")
+TwoParErrPlot(model_list = models_summary$mcp,
+              row_par_name = "lambda",
+              col_par_name = "gamma",
+              cv_err_matr_name = "cv.err.matr",
+              row_par_min_name = "lmin",
+              col_par_min_name = "gmin",
+              my.main = "MCP Cv error contour",
+              my.xlab = "log lambda",
+              my.ylab = "gamma")
 ```
 The minimum is on the regulation parameters border, in particular $\gamma$ is close to one: the optimal solution seems not that reliable.
 
