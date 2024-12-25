@@ -1,0 +1,29 @@
+{
+    "folders": {
+        "edit_df_folder": "../../",
+        "core_folder_arrests": "../../../core_datasets/arrests",
+        "final_datasets_folder": "../../../final_datasets",
+        "coordinates_maps_folder": "../../../coordinates_maps",
+        "var_to_keep_folder": "../",
+        "census_folder": "../../../census_interpolation",
+        "census_var_to_keep_folder": "../../census"
+    },
+    "files": {
+        "core_df_path": "NYPD_Arrests_Data__Historic__20241202.csv",
+        "var_v1_to_keep_path": "arrests_var_to_keep.csv",
+        "var_v2_to_keep_path": "arrests_nta_v2_var_to_keep.csv",
+        "coordinates_file_path": "nta.geojson",
+        "output_df_path": "arrests_2010_2020_nta.csv",
+        "census_data_path": "cen_econ.CSV",
+        "census_var_to_keep_path": "census_variables_to_keep.CSV"
+    },
+    "variables": {
+        "date_variable_name": "ARREST_DATE",
+        "age_group_variable_name": "AGE_GROUP",
+        "considered_years_list": ["2010", "2011","2012","2013","2014","2015","2016","2017","2018","2019","2020"],
+        "census_coord_var_name": "NTA2020",
+        "census_coord_value_to_keep": ["NTA2020"],
+        "df_space_var_name": "NTA2020",
+        "census_df_space_var_name": "NTA2020"
+    }
+}

@@ -1,3 +1,0 @@
-"GEO_ID","Geography"
-"NAME","Geographic Area Name"
-"S2503_C01_013E","Occupied housing units!!Estimate!!HOUSEHOLD INCOME IN THE PAST 12 MONTHS (IN 2011 INFLATION-ADJUSTED DOLLARS)!!Median household income (dollars)"

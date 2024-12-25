@@ -40,7 +40,7 @@ if(!bool_execute_heavy_chunks){
 ## Preprocessing
 ```{r}
 # read the data
-my.df = read.csv("../../data/core_datasets/arrests/arrests_2010_nta.csv", stringsAsFactors = T)
+my.df = read.csv("../../data/core_datasets/arrests/arrests_2010_2020_nta.csv", stringsAsFactors = T)
 ```
 
 Remove date and NTA variables, convert to factor location, month and KY_CD.
