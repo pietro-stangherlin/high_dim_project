@@ -226,9 +226,6 @@ GroupByMONTHSets = function(mydf, month_indexes){
   group_by_all() %>% 
   summarise(count = n())
   
-  month_grouped$y = month_grouped$count /
-    (month_grouped$Pop1 * length(month_indexes))
-  
   return(month_grouped)
 }
 ```
@@ -267,18 +264,18 @@ my.df.year.grouped = my.df %>%
 
 
 # take the log to 
-my.df.year.grouped$y = log(my.df.year.grouped$count / my.df.year.grouped$Pop1)
+my.df.year.grouped$y = log(my.df.year.grouped$count) - log(my.df.year.grouped$Pop1 + 1) - log(12)
 ```
 
 ```{r}
 
-FORMULA.NO.KY_CD = as.formula("y ~. -1 -Pop1 - count + 
+FORMULA.NO.KY_CD = as.formula("count ~. -1 -Pop1 + 
                             NTA2020:LAW_CAT_CD +
                             NTA2020:AGE_GROUP +
                             NTA2020:PERP_SEX +
                             NTA2020:PERP_RACE")
 
-FORMULA.NO.INTERACTIONS = as.formula("y ~. -1 -Pop1 - count")
+FORMULA.NO.INTERACTIONS = as.formula("count ~. -1 -Pop1")
 ```
 
 
@@ -315,11 +312,18 @@ MakeMonthCvSets <- function(my_df, month_sets_ind, formula) {
     cv_sets[[i]]$train$model_matrix <- sparse.model.matrix(formula,
                                                            data = cv_sets[[i]]$train$df)
     
+    # here it's the number of months considered
+    cv_sets[[i]]$train$offset.constant <- length(setdiff(1:12, ncol(month_sets_ind)))
+    
+    
     cv_sets[[i]]$test$df <- GroupByMONTHSets(mydf = my_df,
                                              month_indexes = month_sets_ind[i, ])
     
     cv_sets[[i]]$test$model_matrix <- sparse.model.matrix(formula,
                                                           data = cv_sets[[i]]$test$df)
+    
+     # here it's the number of months considered
+    cv_sets[[i]]$test$offset.constant <- length(ncol(month_sets_ind))
     gc()
   }
   
@@ -355,9 +359,11 @@ Lasso_CV <- function(cv_sets,
                           nrow = length(my.lambda.vals),
                           ncol = length(cv_sets))
   
-  for (i in 1:dim(temp_err_matr)[2]) {
+  for (i in 1:length(cv_sets)) {
     temp_fit <- glmnet(x = cv_sets[[i]]$train$model_matrix,
-                       y = cv_sets[[i]]$train$df$y,
+                       y = log(cv_sets[[i]]$train$df$count) - # adjust for months and population, take logarithm
+                         log(cv_sets[[i]]$train$df$Pop1 + 1) -
+                         log(cv_sets[[i]]$train$offset.constant),
                        alpha = 1,
                        lambda = my.lambda.vals)
     
@@ -365,8 +371,10 @@ Lasso_CV <- function(cv_sets,
                         newx = cv_sets[[i]]$test$model_matrix)
     
     temp_err_matr[, i] <- apply(pred_fit, 2,
-                                function(col) RMSEfun(true_vals = exp(cv_sets[[i]]$test$df$y),
-                                                      pred_vals = exp(col)))
+                                function(col) RMSEfun(true_vals = cv_sets[[i]]$test$df$count,
+                                                      pred_vals = exp(col +
+                                                                        log(cv_sets[[i]]$test$df$Pop1 + 1)+
+                                                                        log(cv_sets[[i]]$test$offset.constant))))
     
     rm(temp_fit)
     rm(pred_fit)
@@ -438,15 +446,21 @@ PlotOneDim = function(x, y, se,
 }
 
 ```
-#### No interactions
+
 
 ```{r}
 models_summary$lasso.noint <- Lasso_CV(month.noint.cv.k4.sets,
                                         my.lambda.vals = exp(seq(-17, -6, 0.1)) %>% sort(decreasing = T))
 ```
 
+```{r}
+models_summary$lasso <- Lasso_CV(month.yesint.cv.k4.sets,
+                                        my.lambda.vals = exp(seq(-13, -6, 0.1)) %>% sort(decreasing = T))
+```
 
 ```{r}
+par(mfrow = c(1,2))
+
 PlotOneDim(x = log(models_summary$lasso.noint$lambda),
            y = models_summary$lasso.noint$cv.err.matr[,"cv.err"],
            se = models_summary$lasso.noint$cv.err.matr[,"cv.se"],
@@ -457,18 +471,7 @@ PlotOneDim(x = log(models_summary$lasso.noint$lambda),
            main = "LASSO no interactions CV error",
           min.leg = "lambda min",
            onese.leg = "lambda 1se")
-```
 
-
-
-#### Yes interactions 
-
-```{r}
-models_summary$lasso <- Lasso_CV(month.yesint.cv.k4.sets,
-                                        my.lambda.vals = exp(seq(-13, -6, 0.1)) %>% sort(decreasing = T))
-```
-
-```{r}
 PlotOneDim(x = log(models_summary$lasso$lambda),
            y = models_summary$lasso$cv.err.matr$cv.err,
            se = models_summary$lasso$cv.err.matr$cv.se,
@@ -476,11 +479,12 @@ PlotOneDim(x = log(models_summary$lasso$lambda),
            x.1se = log(models_summary$lasso$l1se),
            xlab = "log lambda",
            ylab = "CV error",
-           main = "LASSO CV error",
+           main = "LASSO yes interaction CV error",
           min.leg = "lambda min",
            onese.leg = "lambda 1se")
+
+par(mfrow = c(1,1))
 ```
-Best $lambda$ is close to zero, so the best solution seems OLS classical solution.
 
 ### Elasticnet
 
@@ -502,7 +506,9 @@ Elastic_Cv <- function(cv.sets,
     for(j in 1:length(my.alpha.vals)){
       
     temp_fit <- glmnet(x = cv.sets[[k]]$train$model_matrix,
-                       y = cv.sets[[k]]$train$df$y,
+                       y = log(cv_sets[[k]]$train$df$count) - # adjust for months and population, take logarithm
+                         log(cv_sets[[k]]$train$df$Pop1 + 1) -
+                         log(cv_sets[[k]]$train$offset.constant),
                        alpha = my.alpha.vals[j],
                        lambda = my.lambda.vals)
     
@@ -510,8 +516,10 @@ Elastic_Cv <- function(cv.sets,
                         newx = cv.sets[[k]]$test$model_matrix)
     
     temp.err.array[,j,k] <- apply(pred_fit, 2,
-                                function(col) RMSEfun(true_vals = exp(cv.sets[[k]]$test$df$y),
-                                                      pred_vals = exp(col)))
+                                function(col) RMSEfun(true_vals = cv_sets[[k]]$test$df$count,
+                                                      pred_vals = exp(col +
+                                                                        log(cv_sets[[k]]$test$df$Pop1 + 1) +
+                                                                        log(cv_sets[[k]]$test$offset.constant))))
     
     rm(temp_fit)
     rm(pred_fit)
@@ -591,7 +599,6 @@ legend("topleft",
 }
 ```
 
-#### No Interaction
 
 ```{r}
 models_summary$elasticnet.noint = Elastic_Cv(cv.sets = month.noint.cv.k4.sets,
@@ -599,8 +606,15 @@ models_summary$elasticnet.noint = Elastic_Cv(cv.sets = month.noint.cv.k4.sets,
                                              my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 20))
 ```
 
-```{r}
+```{r, eval = bool_execute_heavy_chunks}
 
+models_summary$elasticnet = Elastic_Cv(cv.sets = month.yesint.cv.k4.sets,
+                                             my.lambda.vals = exp(seq(-20, -8, 0.1)) %>% sort(decreasing = TRUE),
+                                             my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 20))
+```
+
+```{r}
+par(mfrow = c(1,2))
 TwoParErrPlot(model_list = models_summary$elasticnet.noint,
               row_par_name = "lambda",
               col_par_name = "alpha",
@@ -610,33 +624,24 @@ TwoParErrPlot(model_list = models_summary$elasticnet.noint,
               my.main = "Elasticnet no interaction Cv error contour",
               my.xlab = "log lambda",
               my.ylab = "alpha")
-```
 
-#### Yes Interaction
-Selecting a grid of 20 $\alpha \in (0,1)$.
-```{r, eval = bool_execute_heavy_chunks}
-
-models_summary$elasticnet = Elastic_Cv(cv.sets = month.yesint.cv.k4.sets,
-                                             my.lambda.vals = exp(seq(-20, -8, 0.1)) %>% sort(decreasing = TRUE),
-                                             my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 20))
-```
-
-```{r}
 TwoParErrPlot(model_list = models_summary$elasticnet,
               row_par_name = "lambda",
               col_par_name = "alpha",
               cv_err_matr_name = "cv.err.matr",
               row_par_min_name = "lmin",
               col_par_min_name = "amin",
-              my.main = "Elasticnet no interaction Cv error contour",
+              my.main = "Elasticnet yes interaction Cv error contour",
               my.xlab = "log lambda",
               my.ylab = "alpha")
+
+par(mfrow = c(1,1))
 ```
 
-The best selected model is close to a ridge regression since $\alpha$ is close to zero.
 
 
 ### Scad
+
 ```{r}
 # general purpuose MCP or SCAD CV function
 NonConvex_Cv <- function(cv.sets,
@@ -656,7 +661,9 @@ NonConvex_Cv <- function(cv.sets,
     for(j in 1:length(my.gamma.vals)){
       
     temp_fit <- ncvreg(X = as.matrix(cv.sets[[k]]$train$model_matrix),
-                       y = cv.sets[[k]]$train$df$y,
+                       y = log(cv_sets[[k]]$train$df$count) - # adjust for months and population, take logarithm
+                         log(cv_sets[[k]]$train$df$Pop1 + 1) -
+                         log(cv_sets[[k]]$train$offset.constant),
                        gamma = my.gamma.vals[j],
                        lambda = my.lambda.vals,
                        penalty = my.penalty)
@@ -665,8 +672,10 @@ NonConvex_Cv <- function(cv.sets,
                         X = as.matrix(cv.sets[[k]]$test$model_matrix))
     
     temp.err.array[,j,k] <- apply(pred_fit, 2,
-                                function(col) RMSEfun(true_vals = exp(cv.sets[[k]]$test$df$y),
-                                                      pred_vals = exp(col)))
+                                function(col) RMSEfun(true_vals = cv_sets[[k]]$test$df$count,
+                                                      pred_vals = exp(col +
+                                                                        log(cv_sets[[k]]$test$df$Pop1 + 1) +
+                                                                        log(cv_sets[[k]]$test$offset.constant))))
     
     rm(temp_fit)
     rm(pred_fit)
@@ -703,7 +712,6 @@ NonConvex_Cv <- function(cv.sets,
 
 ```
 
-#### No interaction
 
 ```{r, eval = bool_execute_heavy_chunks}
 models_summary$scad.noint = NonConvex_Cv(cv.sets = month.noint.cv.k4.sets,
@@ -711,23 +719,6 @@ models_summary$scad.noint = NonConvex_Cv(cv.sets = month.noint.cv.k4.sets,
                                              my.gamma.vals = seq(2+1e-05, 20, length = 20),
                                          my.penalty = "SCAD")
 ```
-
-```{r}
-
-TwoParErrPlot(model_list = models_summary$scad.noint,
-              row_par_name = "lambda",
-              col_par_name = "gamma",
-              cv_err_matr_name = "cv.err.matr",
-              row_par_min_name = "lmin",
-              col_par_min_name = "gmin",
-              my.main = "SCAD no interaction Cv error contour",
-              my.xlab = "log lambda",
-              my.ylab = "gamma")
-
-```
-
-
-#### Yes Interaction
 
 ```{r, warning = FALSE, eval = bool_execute_heavy_chunks}
 models_summary$scad = NonConvex_Cv(cv.sets = month.yesint.cv.k4.sets,
@@ -738,6 +729,16 @@ models_summary$scad = NonConvex_Cv(cv.sets = month.yesint.cv.k4.sets,
 ```
 
 ```{r}
+par(mfrow = c(1,2))
+TwoParErrPlot(model_list = models_summary$scad.noint,
+              row_par_name = "lambda",
+              col_par_name = "gamma",
+              cv_err_matr_name = "cv.err.matr",
+              row_par_min_name = "lmin",
+              col_par_min_name = "gmin",
+              my.main = "SCAD no interaction Cv error contour",
+              my.xlab = "log lambda",
+              my.ylab = "gamma")
 
 TwoParErrPlot(model_list = models_summary$scad,
               row_par_name = "lambda",
@@ -745,11 +746,13 @@ TwoParErrPlot(model_list = models_summary$scad,
               cv_err_matr_name = "cv.err.matr",
               row_par_min_name = "lmin",
               col_par_min_name = "gmin",
-              my.main = "SCAD interaction Cv error contour",
+              my.main = "SCAD yes interaction Cv error contour",
               my.xlab = "log lambda",
               my.ylab = "gamma")
+
+par(mfrow = c(1,1))
+
 ```
-Check if the estimate is in the non convex region.
 
 ```{r,  warning=FALSE, eval = bool_execute_heavy_chunks}
 scad.fit.all = ncvreg(X = as.matrix(my.df.year.grouped.matrix),
@@ -765,7 +768,6 @@ abline(v = log(models_summary$scad$lmin), col = "blue", lty = 2, lwd = 2)
 
 ### MCP
 
-#### No interaction
 ```{r, eval = bool_execute_heavy_chunks}
 models_summary$mcp.noint = NonConvex_Cv(cv.sets = month.noint.cv.k4.sets,
                                              my.lambda.vals = exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE),
@@ -773,8 +775,16 @@ models_summary$mcp.noint = NonConvex_Cv(cv.sets = month.noint.cv.k4.sets,
                                          my.penalty = "MCP")
 ```
 
+```{r, warning = FALSE, eval = bool_execute_heavy_chunks}
+models_summary$mcp = NonConvex_Cv(cv.sets = month.yesint.cv.k4.sets,
+                                             my.lambda.vals = exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE),
+                                             my.gamma.vals = seq(1+1e-05, 20, length = 20),
+                                         my.penalty = "MCP")
+```
+
 
 ```{r}
+par(mfrow = c(1,2))
 TwoParErrPlot(model_list = models_summary$mcp.noint,
               row_par_name = "lambda",
               col_par_name = "gamma",
@@ -784,29 +794,19 @@ TwoParErrPlot(model_list = models_summary$mcp.noint,
               my.main = "MCP no interaction Cv error contour",
               my.xlab = "log lambda",
               my.ylab = "gamma")
-```
 
-
-#### Yes interaction
-```{r, warning = FALSE, eval = bool_execute_heavy_chunks}
-models_summary$mcp = NonConvex_Cv(cv.sets = month.yesint.cv.k4.sets,
-                                             my.lambda.vals = exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE),
-                                             my.gamma.vals = seq(1+1e-05, 20, length = 20),
-                                         my.penalty = "MCP")
-```
-
-```{r}
 TwoParErrPlot(model_list = models_summary$mcp,
               row_par_name = "lambda",
               col_par_name = "gamma",
               cv_err_matr_name = "cv.err.matr",
               row_par_min_name = "lmin",
               col_par_min_name = "gmin",
-              my.main = "MCP Cv error contour",
+              my.main = "MCP Cv yes interaction error contour",
               my.xlab = "log lambda",
               my.ylab = "gamma")
+
+par(mfrow = c(1,1))
 ```
-The minimum is on the regulation parameters border, in particular $\gamma$ is close to one: the optimal solution seems not that reliable.
 
 ```{r, eval = bool_execute_heavy_chunks}
 mcp.fit.all = ncvreg(X = as.matrix(my.df.year.grouped.matrix),
@@ -854,11 +854,11 @@ Lasso_Offset_CV <- function(cv_sets,
                        alpha = 1,
                        lambda = my.lambda.vals,
                        family = my.family,
-                       offset = log(my.offset_constant_train) + log(cv_sets[[i]]$train$df[[my.offset_var_name]]))
+                       offset = log(my.offset_constant_train) + log(cv_sets[[i]]$train$df[[my.offset_var_name]] + 1))
     
     pred_fit <- predict(temp_fit,
                         newx = cv_sets[[i]]$test$model_matrix,
-                        newoffset = log(my.offset_constant_test) + log(cv_sets[[i]]$test$df[[my.offset_var_name]]),
+                        newoffset = log(my.offset_constant_test) + log(cv_sets[[i]]$test$df[[my.offset_var_name]] + 1),
                         type = "response")
     
     temp_err_matr[, i] <- apply(pred_fit, 2,
@@ -906,8 +906,6 @@ Lasso_Offset_CV <- function(cv_sets,
 glmnet.control(mxitnr = 50) # increase maximum no. of IRLS iterations allowed
 ```
 
-#### No interaction
-
 ```{r, eval = bool_execute_heavy_chunks}
 models_summary$lasso.poi.noint = Lasso_Offset_CV(cv_sets = month.noint.cv.k4.sets,
                                           my.lambda.vals = exp(seq(-15, 3, 0.1)) %>% sort(decreasing = TRUE),
@@ -918,21 +916,6 @@ models_summary$lasso.poi.noint = Lasso_Offset_CV(cv_sets = month.noint.cv.k4.set
                                           my.offset_var_name = "Pop1")
 ```
 
-
-```{r}
-PlotOneDim(x = log(models_summary$lasso.poi.noint$lambda),
-           y = models_summary$lasso.poi.noint$cv.err.matr[,"cv.err"],
-           se = models_summary$lasso.poi.noint$cv.err.matr[,"cv.se"],
-           x.min = log(models_summary$lasso.poi.noint$lmin),
-           x.1se = log(models_summary$lasso.poi.noint$l1se),
-           xlab = "log lambda",
-           ylab = "CV error",
-           main = "LASSO no interaction Poisson CV error",
-          min.leg = "lambda min",
-           onese.leg = "lambda 1se")
-```
-
-#### Yes interaction
 ```{r, eval = bool_execute_heavy_chunks, warning=FALSE}
 models_summary$lasso.poi = Lasso_Offset_CV(cv_sets = month.yesint.cv.k4.sets,
                                           my.lambda.vals = exp(seq(-15, 3, 0.1)) %>% sort(decreasing = TRUE),
@@ -943,8 +926,19 @@ models_summary$lasso.poi = Lasso_Offset_CV(cv_sets = month.yesint.cv.k4.sets,
                                           my.offset_var_name = "Pop1")
 ```
 
-
 ```{r}
+par(mfrow = c(1,2))
+PlotOneDim(x = log(models_summary$lasso.poi.noint$lambda),
+           y = models_summary$lasso.poi.noint$cv.err.matr[,"cv.err"],
+           se = models_summary$lasso.poi.noint$cv.err.matr[,"cv.se"],
+           x.min = log(models_summary$lasso.poi.noint$lmin),
+           x.1se = log(models_summary$lasso.poi.noint$l1se),
+           xlab = "log lambda",
+           ylab = "CV error",
+           main = "LASSO no interaction Poisson CV error",
+          min.leg = "lambda min",
+           onese.leg = "lambda 1se")
+
 PlotOneDim(x = log(models_summary$lasso.poi$lambda),
            y = models_summary$lasso.poi$cv.err.matr$cv.err,
            se = models_summary$lasso.poi$cv.err.matr$cv.se,
@@ -952,11 +946,13 @@ PlotOneDim(x = log(models_summary$lasso.poi$lambda),
            x.1se = log(models_summary$lasso.poi$l1se),
            xlab = "log lambda",
            ylab = "CV error",
-           main = "LASSO Poisson CV error",
+           main = "LASSO Poisson yes interaction CV error",
           min.leg = "lambda min",
            onese.leg = "lambda 1se")
+
+par(mfrow = c(1,1))
 ```
-There's a problem here since for smaller $\lambda$ values the algorithm does not converge.
+
 
 ```{r}
 # backup to save key model info
@@ -991,11 +987,11 @@ Elastic_Offset_Cv <- function(cv.sets,
                        alpha = my.alpha.vals[j],
                        lambda = my.lambda.vals,
                        family = my.family,
-                       offset = log(my.offset_constant_train) + log(cv.sets[[k]]$train$df[[my.offset_var_name]]))
+                       offset = log(my.offset_constant_train) + log(cv.sets[[k]]$train$df[[my.offset_var_name]]+1))
     
     pred_fit <- predict(temp_fit,
                         newx = cv.sets[[k]]$test$model_matrix,
-                        newoffset = log(my.offset_constant_test) + log(cv.sets[[k]]$test$df[[my.offset_var_name]]))
+                        newoffset = log(my.offset_constant_test) + log(cv.sets[[k]]$test$df[[my.offset_var_name]]+1))
     
     temp.err.array[,j,k] <- apply(pred_fit, 2,
                                 function(col) RMSEfun(true_vals = cv.sets[[k]]$test$df[[my.response.name]],
@@ -1036,7 +1032,6 @@ Elastic_Offset_Cv <- function(cv.sets,
 
 ```
 
-#### No interaction
 
 ```{r, warning=FALSE, eval = bool_execute_heavy_chunks}
 models_summary$elasticnet.poi.noint = Elastic_Offset_Cv(cv.sets = month.noint.cv.k4.sets,
@@ -1048,22 +1043,6 @@ models_summary$elasticnet.poi.noint = Elastic_Offset_Cv(cv.sets = month.noint.cv
                                                         my.offset_constant_test = 3, # 12 - 9 months
                                                         my.offset_var_name = "Pop1")
 ```
-
-```{r}
-
-TwoParErrPlot(model_list = models_summary$elasticnet.poi.noint,
-              row_par_name = "lambda",
-              col_par_name = "alpha",
-              cv_err_matr_name = "cv.err.matr",
-              row_par_min_name = "lmin",
-              col_par_min_name = "amin",
-              my.main = "Elasticnet no interaction Cv error contour",
-              my.xlab = "log lambda",
-              my.ylab = "alpha")
-```
-
-
-#### Yes interaction
 
 ```{r, warning=FALSE, eval = bool_execute_heavy_chunks}
 models_summary$elasticnet.poi = Elastic_Offset_Cv(cv.sets = month.yesint.cv.k4.sets,
@@ -1077,6 +1056,16 @@ models_summary$elasticnet.poi = Elastic_Offset_Cv(cv.sets = month.yesint.cv.k4.s
 ```
 
 ```{r}
+par(mfrow = c(1,2))
+TwoParErrPlot(model_list = models_summary$elasticnet.poi.noint,
+              row_par_name = "lambda",
+              col_par_name = "alpha",
+              cv_err_matr_name = "cv.err.matr",
+              row_par_min_name = "lmin",
+              col_par_min_name = "amin",
+              my.main = "Elasticnet no interaction Cv error contour",
+              my.xlab = "log lambda",
+              my.ylab = "alpha")
 
 TwoParErrPlot(model_list = models_summary$elasticnet.poi,
               row_par_name = "lambda",
@@ -1084,9 +1073,11 @@ TwoParErrPlot(model_list = models_summary$elasticnet.poi,
               cv_err_matr_name = "cv.err.matr",
               row_par_min_name = "lmin",
               col_par_min_name = "amin",
-              my.main = "Elasticnet Poisson Cv error contour",
+              my.main = "Elasticnet Poisson yes interaction Cv error contour",
               my.xlab = "log lambda",
               my.ylab = "alpha")
+
+par(mfrow = c(1,1))
 ```
 
 ```{r}
@@ -1129,11 +1120,11 @@ LASSO_NegBin_Offset_Cv <- function(cv.sets,
                        alpha = 1,
                        lambda = my.lambda.vals,
                        family = negative.binomial(theta = my.theta.vals[j]),
-                       offset = log(my.offset_constant_train) + log(cv.sets[[k]]$train$df[[my.offset_var_name]]))
+                       offset = log(my.offset_constant_train) + log(cv.sets[[k]]$train$df[[my.offset_var_name]]+1))
     
     pred_fit <- predict(temp_fit,
                         newx = cv.sets[[k]]$test$model_matrix,
-                        newoffset = log(my.offset_constant_test) + log(cv.sets[[k]]$test$df[[my.offset_var_name]]))
+                        newoffset = log(my.offset_constant_test) + log(cv.sets[[k]]$test$df[[my.offset_var_name]]+1))
     
     temp.err.array[,j,k] <- apply(pred_fit, 2,
                                 function(col) RMSEfun(true_vals = cv.sets[[k]]$test$df[[my.response.name]],
@@ -1176,9 +1167,6 @@ LASSO_NegBin_Offset_Cv <- function(cv.sets,
 ```
 
 
-
-#### No interaction
-
 ```{r, warning=FALSE, eval = bool_execute_heavy_chunks}
 models_summary$lasso.negbin.noint = LASSO_NegBin_Offset_Cv(cv.sets = month.noint.cv.k4.sets,
                                                         my.lambda.vals = exp(seq(-3, 5, 0.2)) %>% sort(decreasing = TRUE),
@@ -1189,20 +1177,6 @@ models_summary$lasso.negbin.noint = LASSO_NegBin_Offset_Cv(cv.sets = month.noint
                                                         my.offset_var_name = "Pop1")
 ```
 
-```{r}
-
-TwoParErrPlot(model_list = models_summary$lasso.negbin.noint,
-              row_par_name = "lambda",
-              col_par_name = "theta",
-              cv_err_matr_name = "cv.err.matr",
-              row_par_min_name = "lmin",
-              col_par_min_name = "tmin",
-              my.main = "LASSO Negative Binomial no interaction Cv error contour",
-              my.xlab = "log lambda",
-              my.ylab = "theta")
-```
-
-#### Yes interaction
 ```{r, warning=FALSE, eval = bool_execute_heavy_chunks}
 models_summary$lasso.negbin = LASSO_NegBin_Offset_Cv(cv.sets = month.yesint.cv.k4.sets,
                                                         my.lambda.vals = exp(seq(-10, 2, 0.2)) %>% sort(decreasing = TRUE),
@@ -1214,6 +1188,17 @@ models_summary$lasso.negbin = LASSO_NegBin_Offset_Cv(cv.sets = month.yesint.cv.k
 ```
 
 ```{r}
+par(mfrow = c(1,2))
+
+TwoParErrPlot(model_list = models_summary$lasso.negbin.noint,
+              row_par_name = "lambda",
+              col_par_name = "theta",
+              cv_err_matr_name = "cv.err.matr",
+              row_par_min_name = "lmin",
+              col_par_min_name = "tmin",
+              my.main = "LASSO Negative Binomial no interaction Cv error contour",
+              my.xlab = "log lambda",
+              my.ylab = "theta")
 
 TwoParErrPlot(model_list = models_summary$lasso.negbin,
               row_par_name = "lambda",
@@ -1221,9 +1206,11 @@ TwoParErrPlot(model_list = models_summary$lasso.negbin,
               cv_err_matr_name = "cv.err.matr",
               row_par_min_name = "lmin",
               col_par_min_name = "tmin",
-              my.main = "LASSO Negative Binomial Cv error contour",
+              my.main = "LASSO Negative Binomial yes interaction Cv error contour",
               my.xlab = "log lambda",
               my.ylab = "theta")
+
+par(mfrow = c(1,1))
 ```
 
 ```{r}
