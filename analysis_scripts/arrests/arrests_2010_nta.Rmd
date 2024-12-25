@@ -215,7 +215,7 @@ my.df %>%
 ### Model selection method
 
 Given the previously described constraints, in order to be able to apply a cross validation (CV) selection method we choose to ignore the time (MONTH) factor using MONTH as index to create the CV folds as described below.
-Choose k: the number of validation sets (example k = 4) each validation set is made by grouped observations of 12 / k (3) months and the months left (9) are used to fit the model. To try to compensate and average for seasonal fluctuations the validation months are chosen as spaced as possible, for example, in the case k = 4 the first validation set is (january, may, september), the second set is (february, june, october), the third is (march, july, november) and the forth is (april, august, december); in order to make each response comparable having used a different number of months a new response is defined as the arrests ratio divided by the number of months used in the grouping.
+Choose k: the number of validation sets (example k = 4) each validation set is made by grouped observations of 12 / k (3) months and the months left (9) are used to fit the model. To try to compensate and average for seasonal fluctuations the validation months are chosen as spaced as possible, for example, in the case k = 4 the first validation set is (january, may, september), the second set is (february, june, october), the third is (march, july, november) and the forth is (april, august, december); in order to make each response comparable having used a different number of months a new response is defined as the arrests ratio divided by the number of months used in the grouping. Note: this is also a way to reduce the computational burden compared to using many more months combinations.
 
 ```{r}
 # Groub by months indexes
@@ -243,6 +243,7 @@ month_sets_ind = list(k4 = matrix(c(1, 5, 9,
                                     4, 8, 12),
                                   byrow = T,
                                   nrow = 4),
+                      
                       k6 = matrix(c(1, 7,
                                     2, 8,
                                     3, 9,
@@ -294,66 +295,48 @@ RMSEfun = function(true_vals, pred_vals){
 }
 ```
 
-
 ```{r, warning=FALSE, message=FALSE}
-
-# Model matrices: omit KY_CD variables due to computational issues.
-# Make a list of fit and validation sets:
-
+library(glmnet)
 library(dplyr)
-library(Matrix)
 
-# NO Interaction
-month.noint.fit.val.k4.sets = list()
-
-for (i in 1:nrow(month_sets_ind$k4)){
-  # make sublists
-  month.noint.fit.val.k4.sets[[i]] = list(train = list(y = NA,model_matrix = NA),
-                                    test = list(y = NA,model_matrix = NA))
+# Function to create cross-validation sets
+MakeMonthCvSets <- function(my_df, month_sets_ind, formula) {
+  cv_sets <- list()
   
-  # populate the sublists
-  # keep also the all df
-  month.noint.fit.val.k4.sets[[i]]$train$df = GroupByMONTHSets(mydf = my.df,
-                       month_indexes = setdiff(1:12, month_sets_ind$k4[i,]))
+  for (i in 1:nrow(month_sets_ind)) {
+    # Make sublists
+    cv_sets[[i]] <- list(train = list(df = NA, model_matrix = NA),
+                         test = list(df = NA, model_matrix = NA))
+    
+    # Populate the sublists
+    cv_sets[[i]]$train$df <- GroupByMONTHSets(mydf = my_df,
+                                              month_indexes = setdiff(1:12, month_sets_ind[i, ]))
+    
+    cv_sets[[i]]$train$model_matrix <- sparse.model.matrix(formula,
+                                                           data = cv_sets[[i]]$train$df)
+    
+    cv_sets[[i]]$test$df <- GroupByMONTHSets(mydf = my_df,
+                                             month_indexes = month_sets_ind[i, ])
+    
+    cv_sets[[i]]$test$model_matrix <- sparse.model.matrix(formula,
+                                                          data = cv_sets[[i]]$test$df)
+    gc()
+  }
   
-  month.noint.fit.val.k4.sets[[i]]$train$model_matrix = sparse.model.matrix(FORMULA.NO.INTERACTIONS,
-                          data = month.noint.fit.val.k4.sets[[i]]$train$df)
-  
-  
-  month.noint.fit.val.k4.sets[[i]]$test$df = GroupByMONTHSets(mydf = my.df,
-                       month_indexes = month_sets_ind$k4[i,])
-  
-  month.noint.fit.val.k4.sets[[i]]$test$model_matrix = sparse.model.matrix(FORMULA.NO.INTERACTIONS,
-                          data = month.noint.fit.val.k4.sets[[i]]$test$df)
-  gc()
+  return(cv_sets)
 }
 
 
+# NO interaction
+month.noint.cv.k4.sets = MakeMonthCvSets(my_df = my.df,
+                       month_sets_ind = month_sets_ind$k4,
+                       formula = FORMULA.NO.INTERACTIONS)
 
-# YES interaction 
-month.fit.val.k4.sets = list()
+# Yes interaction
+month.yesint.cv.k4.sets = MakeMonthCvSets(my_df = my.df,
+                       month_sets_ind = month_sets_ind$k4,
+                       formula = FORMULA.NO.KY_CD)
 
-for (i in 1:nrow(month_sets_ind$k4)){
-  # make sublists
-  month.fit.val.k4.sets[[i]] = list(train = list(y = NA,model_matrix = NA),
-                                    test = list(y = NA,model_matrix = NA))
-  
-  # populate the sublists
-  # keep also the all df
-  month.fit.val.k4.sets[[i]]$train$df = GroupByMONTHSets(mydf = my.df,
-                       month_indexes = setdiff(1:12, month_sets_ind$k4[i,]))
-  
-  month.fit.val.k4.sets[[i]]$train$model_matrix = sparse.model.matrix(FORMULA.NO.KY_CD,
-                          data = month.fit.val.k4.sets[[i]]$train$df)
-  
-  
-  month.fit.val.k4.sets[[i]]$test$df = GroupByMONTHSets(mydf = my.df,
-                       month_indexes = month_sets_ind$k4[i,])
-  
-  month.fit.val.k4.sets[[i]]$test$model_matrix = sparse.model.matrix(FORMULA.NO.KY_CD,
-                          data = month.fit.val.k4.sets[[i]]$test$df)
-  gc()
-}
 
 ```
 
@@ -392,7 +375,7 @@ Lasso_CV <- function(cv_sets,
   
   # Compute error matrix and lambda min and 1se
   cv_err_matr <- cbind(apply(temp_err_matr, 1, mean),
-                                    apply(temp_err_matr, 1, sd) / ncol(temp_err_matr)) %>% as.data.frame()
+                                    apply(temp_err_matr, 1, sd) / sqrt(ncol(temp_err_matr))) %>% as.data.frame()
   
   colnames(cv_err_matr) <- c("cv.err", "cv.se")
   
@@ -458,7 +441,7 @@ PlotOneDim = function(x, y, se,
 #### No interactions
 
 ```{r}
-models_summary$lasso.noint <- Lasso_CV(month.noint.fit.val.k4.sets,
+models_summary$lasso.noint <- Lasso_CV(month.noint.cv.k4.sets,
                                         my.lambda.vals = exp(seq(-17, -6, 0.1)) %>% sort(decreasing = T))
 ```
 
@@ -481,7 +464,7 @@ PlotOneDim(x = log(models_summary$lasso.noint$lambda),
 #### Yes interactions 
 
 ```{r}
-models_summary$lasso <- Lasso_CV(month.fit.val.k4.sets,
+models_summary$lasso <- Lasso_CV(month.yesint.cv.k4.sets,
                                         my.lambda.vals = exp(seq(-13, -6, 0.1)) %>% sort(decreasing = T))
 ```
 
@@ -611,7 +594,7 @@ legend("topleft",
 #### No Interaction
 
 ```{r}
-models_summary$elasticnet.noint = Elastic_Cv(cv.sets = month.noint.fit.val.k4.sets,
+models_summary$elasticnet.noint = Elastic_Cv(cv.sets = month.noint.cv.k4.sets,
                                              my.lambda.vals = exp(seq(-20, -8, 0.1)) %>% sort(decreasing = TRUE),
                                              my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 20))
 ```
@@ -633,7 +616,7 @@ TwoParErrPlot(model_list = models_summary$elasticnet.noint,
 Selecting a grid of 20 $\alpha \in (0,1)$.
 ```{r, eval = bool_execute_heavy_chunks}
 
-models_summary$elasticnet = Elastic_Cv(cv.sets = month.fit.val.k4.sets,
+models_summary$elasticnet = Elastic_Cv(cv.sets = month.yesint.cv.k4.sets,
                                              my.lambda.vals = exp(seq(-20, -8, 0.1)) %>% sort(decreasing = TRUE),
                                              my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 20))
 ```
@@ -723,7 +706,7 @@ NonConvex_Cv <- function(cv.sets,
 #### No interaction
 
 ```{r, eval = bool_execute_heavy_chunks}
-models_summary$scad.noint = NonConvex_Cv(cv.sets = month.noint.fit.val.k4.sets,
+models_summary$scad.noint = NonConvex_Cv(cv.sets = month.noint.cv.k4.sets,
                                              my.lambda.vals = exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE),
                                              my.gamma.vals = seq(2+1e-05, 20, length = 20),
                                          my.penalty = "SCAD")
@@ -747,7 +730,7 @@ TwoParErrPlot(model_list = models_summary$scad.noint,
 #### Yes Interaction
 
 ```{r, warning = FALSE, eval = bool_execute_heavy_chunks}
-models_summary$scad = NonConvex_Cv(cv.sets = month.fit.val.k4.sets,
+models_summary$scad = NonConvex_Cv(cv.sets = month.yesint.cv.k4.sets,
                                              my.lambda.vals = exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE),
                                              my.gamma.vals = seq(2+1e-05, 20, length = 20),
                                          my.penalty = "SCAD")
@@ -784,7 +767,7 @@ abline(v = log(models_summary$scad$lmin), col = "blue", lty = 2, lwd = 2)
 
 #### No interaction
 ```{r, eval = bool_execute_heavy_chunks}
-models_summary$mcp.noint = NonConvex_Cv(cv.sets = month.noint.fit.val.k4.sets,
+models_summary$mcp.noint = NonConvex_Cv(cv.sets = month.noint.cv.k4.sets,
                                              my.lambda.vals = exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE),
                                              my.gamma.vals = seq(1+1e-05, 20, length = 20),
                                          my.penalty = "MCP")
@@ -806,7 +789,7 @@ TwoParErrPlot(model_list = models_summary$mcp.noint,
 
 #### Yes interaction
 ```{r, warning = FALSE, eval = bool_execute_heavy_chunks}
-models_summary$mcp = NonConvex_Cv(cv.sets = month.fit.val.k4.sets,
+models_summary$mcp = NonConvex_Cv(cv.sets = month.yesint.cv.k4.sets,
                                              my.lambda.vals = exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE),
                                              my.gamma.vals = seq(1+1e-05, 20, length = 20),
                                          my.penalty = "MCP")
@@ -889,7 +872,7 @@ Lasso_Offset_CV <- function(cv_sets,
   
   # Compute error matrix and lambda min and 1se
   cv_err_matr <- cbind(apply(temp_err_matr, 1, mean),
-                                    apply(temp_err_matr, 1, sd) / ncol(temp_err_matr)) %>% as.data.frame()
+                                    apply(temp_err_matr, 1, sd) / sqrt(ncol(temp_err_matr))) %>% as.data.frame()
   
   colnames(cv_err_matr) <- c("cv.err", "cv.se")
   
@@ -926,7 +909,7 @@ glmnet.control(mxitnr = 50) # increase maximum no. of IRLS iterations allowed
 #### No interaction
 
 ```{r, eval = bool_execute_heavy_chunks}
-models_summary$lasso.poi.noint = Lasso_Offset_CV(cv_sets = month.noint.fit.val.k4.sets,
+models_summary$lasso.poi.noint = Lasso_Offset_CV(cv_sets = month.noint.cv.k4.sets,
                                           my.lambda.vals = exp(seq(-15, 3, 0.1)) %>% sort(decreasing = TRUE),
                                           my.response.name = "count",
                                           my.family = poisson(),
@@ -951,7 +934,7 @@ PlotOneDim(x = log(models_summary$lasso.poi.noint$lambda),
 
 #### Yes interaction
 ```{r, eval = bool_execute_heavy_chunks, warning=FALSE}
-models_summary$lasso.poi = Lasso_Offset_CV(cv_sets = month.fit.val.k4.sets,
+models_summary$lasso.poi = Lasso_Offset_CV(cv_sets = month.yesint.cv.k4.sets,
                                           my.lambda.vals = exp(seq(-15, 3, 0.1)) %>% sort(decreasing = TRUE),
                                           my.response.name = "count",
                                           my.family = poisson(),
@@ -1056,7 +1039,7 @@ Elastic_Offset_Cv <- function(cv.sets,
 #### No interaction
 
 ```{r, warning=FALSE, eval = bool_execute_heavy_chunks}
-models_summary$elasticnet.poi.noint = Elastic_Offset_Cv(cv.sets = month.noint.fit.val.k4.sets,
+models_summary$elasticnet.poi.noint = Elastic_Offset_Cv(cv.sets = month.noint.cv.k4.sets,
                                                         my.lambda.vals = exp(seq(-10, 2, 0.2)) %>% sort(decreasing = TRUE),
                                                         my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 20),
                                                         my.response.name = "count",
@@ -1083,7 +1066,7 @@ TwoParErrPlot(model_list = models_summary$elasticnet.poi.noint,
 #### Yes interaction
 
 ```{r, warning=FALSE, eval = bool_execute_heavy_chunks}
-models_summary$elasticnet.poi = Elastic_Offset_Cv(cv.sets = month.fit.val.k4.sets,
+models_summary$elasticnet.poi = Elastic_Offset_Cv(cv.sets = month.yesint.cv.k4.sets,
                                                         my.lambda.vals = exp(seq(-10, 2, 0.2)) %>% sort(decreasing = TRUE),
                                                         my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 20),
                                                         my.response.name = "count",
@@ -1197,7 +1180,7 @@ LASSO_NegBin_Offset_Cv <- function(cv.sets,
 #### No interaction
 
 ```{r, warning=FALSE, eval = bool_execute_heavy_chunks}
-models_summary$lasso.negbin.noint = LASSO_NegBin_Offset_Cv(cv.sets = month.noint.fit.val.k4.sets,
+models_summary$lasso.negbin.noint = LASSO_NegBin_Offset_Cv(cv.sets = month.noint.cv.k4.sets,
                                                         my.lambda.vals = exp(seq(-3, 5, 0.2)) %>% sort(decreasing = TRUE),
                                                         my.theta.vals = seq(1e-5, 3, length = 20),
                                                         my.response.name = "count",
@@ -1221,7 +1204,7 @@ TwoParErrPlot(model_list = models_summary$lasso.negbin.noint,
 
 #### Yes interaction
 ```{r, warning=FALSE, eval = bool_execute_heavy_chunks}
-models_summary$lasso.negbin = LASSO_NegBin_Offset_Cv(cv.sets = month.fit.val.k4.sets,
+models_summary$lasso.negbin = LASSO_NegBin_Offset_Cv(cv.sets = month.yesint.cv.k4.sets,
                                                         my.lambda.vals = exp(seq(-10, 2, 0.2)) %>% sort(decreasing = TRUE),
                                                         my.theta.vals = seq(1e-5, 20, length = 20),
                                                         my.response.name = "count",
