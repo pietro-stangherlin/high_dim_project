@@ -15,7 +15,7 @@ PERP_SEX,1
 PERP_RACE,1
 X_COORD_CD,0
 Y_COORD_CD,0
-Latitude,0
-Longitude,0
+Latitude,1
+Longitude,1
 NTA2020,1
 MONTH,1
