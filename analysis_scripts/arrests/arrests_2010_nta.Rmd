@@ -25,7 +25,7 @@ library(lattice)
 # assuming the models are been loaded from a RData file before.
 # IMPORTANT: in order to reproduce the result set bool_execute_heavy_chunks = TRUE
 
-bool_execute_heavy_chunks = FALSE
+bool_execute_heavy_chunks = TRUE
 
 # require loading models_summary list
 if(!bool_execute_heavy_chunks){
@@ -78,6 +78,7 @@ my.df = na.omit(my.df)
 
 
 ## Description
+
 Ideally 2010 data are our training set and 2011 data are the test set.
 The goal of the analysis is to identify is some covariates are correlated with the arrests rate: more specifically if the response is well explained by some non spatial covariates alone, some spatial alone or interaction between the two.
 
@@ -298,36 +299,36 @@ library(dplyr)
 
 # Function to create cross-validation sets
 MakeMonthCvSets <- function(my_df, month_sets_ind, formula) {
-  cv_sets <- list()
+  cv.sets <- list()
   
   for (i in 1:nrow(month_sets_ind)) {
     # Make sublists
-    cv_sets[[i]] <- list(train = list(df = NA, model_matrix = NA),
+    cv.sets[[i]] <- list(train = list(df = NA, model_matrix = NA),
                          test = list(df = NA, model_matrix = NA))
     
     # Populate the sublists
-    cv_sets[[i]]$train$df <- GroupByMONTHSets(mydf = my_df,
+    cv.sets[[i]]$train$df <- GroupByMONTHSets(mydf = my_df,
                                               month_indexes = setdiff(1:12, month_sets_ind[i, ]))
     
-    cv_sets[[i]]$train$model_matrix <- sparse.model.matrix(formula,
-                                                           data = cv_sets[[i]]$train$df)
+    cv.sets[[i]]$train$model_matrix <- sparse.model.matrix(formula,
+                                                           data = cv.sets[[i]]$train$df)
     
     # here it's the number of months considered
-    cv_sets[[i]]$train$offset.constant <- length(setdiff(1:12, ncol(month_sets_ind)))
+    cv.sets[[i]]$train$offset.constant <- length(setdiff(1:12, ncol(month_sets_ind)))
     
     
-    cv_sets[[i]]$test$df <- GroupByMONTHSets(mydf = my_df,
+    cv.sets[[i]]$test$df <- GroupByMONTHSets(mydf = my_df,
                                              month_indexes = month_sets_ind[i, ])
     
-    cv_sets[[i]]$test$model_matrix <- sparse.model.matrix(formula,
-                                                          data = cv_sets[[i]]$test$df)
+    cv.sets[[i]]$test$model_matrix <- sparse.model.matrix(formula,
+                                                          data = cv.sets[[i]]$test$df)
     
      # here it's the number of months considered
-    cv_sets[[i]]$test$offset.constant <- length(ncol(month_sets_ind))
+    cv.sets[[i]]$test$offset.constant <- length(ncol(month_sets_ind))
     gc()
   }
   
-  return(cv_sets)
+  return(cv.sets)
 }
 
 
@@ -352,29 +353,29 @@ The simplest assumption is to assume a linear (monotone) trend of the response a
 
 ```{r}
 # general purpuose lasso CV function
-Lasso_CV <- function(cv_sets,
+Lasso_CV <- function(cv.sets,
                                   my.lambda.vals) {
   
   temp_err_matr <- matrix(NA, 
                           nrow = length(my.lambda.vals),
-                          ncol = length(cv_sets))
+                          ncol = length(cv.sets))
   
-  for (i in 1:length(cv_sets)) {
-    temp_fit <- glmnet(x = cv_sets[[i]]$train$model_matrix,
-                       y = log(cv_sets[[i]]$train$df$count) - # adjust for months and population, take logarithm
-                         log(cv_sets[[i]]$train$df$Pop1 + 1) -
-                         log(cv_sets[[i]]$train$offset.constant),
+  for (i in 1:length(cv.sets)) {
+    temp_fit <- glmnet(x = cv.sets[[i]]$train$model_matrix,
+                       y = log(cv.sets[[i]]$train$df$count) - # adjust for months and population, take logarithm
+                         log(cv.sets[[i]]$train$df$Pop1 + 1) -
+                         log(cv.sets[[i]]$train$offset.constant),
                        alpha = 1,
                        lambda = my.lambda.vals)
     
     pred_fit <- predict(temp_fit,
-                        newx = cv_sets[[i]]$test$model_matrix)
+                        newx = cv.sets[[i]]$test$model_matrix)
     
     temp_err_matr[, i] <- apply(pred_fit, 2,
-                                function(col) RMSEfun(true_vals = cv_sets[[i]]$test$df$count,
+                                function(col) RMSEfun(true_vals = cv.sets[[i]]$test$df$count,
                                                       pred_vals = exp(col +
-                                                                        log(cv_sets[[i]]$test$df$Pop1 + 1)+
-                                                                        log(cv_sets[[i]]$test$offset.constant))))
+                                                                        log(cv.sets[[i]]$test$df$Pop1 + 1)+
+                                                                        log(cv.sets[[i]]$test$offset.constant))))
     
     rm(temp_fit)
     rm(pred_fit)
@@ -506,9 +507,9 @@ Elastic_Cv <- function(cv.sets,
     for(j in 1:length(my.alpha.vals)){
       
     temp_fit <- glmnet(x = cv.sets[[k]]$train$model_matrix,
-                       y = log(cv_sets[[k]]$train$df$count) - # adjust for months and population, take logarithm
-                         log(cv_sets[[k]]$train$df$Pop1 + 1) -
-                         log(cv_sets[[k]]$train$offset.constant),
+                       y = log(cv.sets[[k]]$train$df$count) - # adjust for months and population, take logarithm
+                         log(cv.sets[[k]]$train$df$Pop1 + 1) -
+                         log(cv.sets[[k]]$train$offset.constant),
                        alpha = my.alpha.vals[j],
                        lambda = my.lambda.vals)
     
@@ -516,10 +517,10 @@ Elastic_Cv <- function(cv.sets,
                         newx = cv.sets[[k]]$test$model_matrix)
     
     temp.err.array[,j,k] <- apply(pred_fit, 2,
-                                function(col) RMSEfun(true_vals = cv_sets[[k]]$test$df$count,
+                                function(col) RMSEfun(true_vals = cv.sets[[k]]$test$df$count,
                                                       pred_vals = exp(col +
-                                                                        log(cv_sets[[k]]$test$df$Pop1 + 1) +
-                                                                        log(cv_sets[[k]]$test$offset.constant))))
+                                                                        log(cv.sets[[k]]$test$df$Pop1 + 1) +
+                                                                        log(cv.sets[[k]]$test$offset.constant))))
     
     rm(temp_fit)
     rm(pred_fit)
@@ -661,9 +662,9 @@ NonConvex_Cv <- function(cv.sets,
     for(j in 1:length(my.gamma.vals)){
       
     temp_fit <- ncvreg(X = as.matrix(cv.sets[[k]]$train$model_matrix),
-                       y = log(cv_sets[[k]]$train$df$count) - # adjust for months and population, take logarithm
-                         log(cv_sets[[k]]$train$df$Pop1 + 1) -
-                         log(cv_sets[[k]]$train$offset.constant),
+                       y = log(cv.sets[[k]]$train$df$count) - # adjust for months and population, take logarithm
+                         log(cv.sets[[k]]$train$df$Pop1 + 1) -
+                         log(cv.sets[[k]]$train$offset.constant),
                        gamma = my.gamma.vals[j],
                        lambda = my.lambda.vals,
                        penalty = my.penalty)
@@ -672,10 +673,10 @@ NonConvex_Cv <- function(cv.sets,
                         X = as.matrix(cv.sets[[k]]$test$model_matrix))
     
     temp.err.array[,j,k] <- apply(pred_fit, 2,
-                                function(col) RMSEfun(true_vals = cv_sets[[k]]$test$df$count,
+                                function(col) RMSEfun(true_vals = cv.sets[[k]]$test$df$count,
                                                       pred_vals = exp(col +
-                                                                        log(cv_sets[[k]]$test$df$Pop1 + 1) +
-                                                                        log(cv_sets[[k]]$test$offset.constant))))
+                                                                        log(cv.sets[[k]]$test$df$Pop1 + 1) +
+                                                                        log(cv.sets[[k]]$test$offset.constant))))
     
     rm(temp_fit)
     rm(pred_fit)
@@ -836,7 +837,7 @@ For all such cases, using the counts as response an offset has to be imposed: in
 #' @param my.offset_constant_train (int): take the log and add to train fold offset (same for all folds)
 #' @param my.offset_constant_test (int): take the log and add to train fold offset ((same for all folds))
 #' @param my.offset_var_name (char): take the log and add to train fold offset (assumed is a variable in cv sets)
-Lasso_Offset_CV <- function(cv_sets,
+Lasso_Offset_CV <- function(cv.sets,
                             my.lambda.vals,
                             my.response.name = "count",
                             my.family = poisson(),
@@ -846,23 +847,23 @@ Lasso_Offset_CV <- function(cv_sets,
   
   temp_err_matr <- matrix(NA, 
                           nrow = length(my.lambda.vals),
-                          ncol = length(cv_sets))
+                          ncol = length(cv.sets))
   
-  for (i in 1:length(cv_sets)) {
-    temp_fit <- glmnet(x = cv_sets[[i]]$train$model_matrix,
-                       y = cv_sets[[i]]$train$df[[my.response.name]],
+  for (i in 1:length(cv.sets)) {
+    temp_fit <- glmnet(x = cv.sets[[i]]$train$model_matrix,
+                       y = cv.sets[[i]]$train$df[[my.response.name]],
                        alpha = 1,
                        lambda = my.lambda.vals,
                        family = my.family,
-                       offset = log(my.offset_constant_train) + log(cv_sets[[i]]$train$df[[my.offset_var_name]] + 1))
+                       offset = log(my.offset_constant_train) + log(cv.sets[[i]]$train$df[[my.offset_var_name]] + 1))
     
     pred_fit <- predict(temp_fit,
-                        newx = cv_sets[[i]]$test$model_matrix,
-                        newoffset = log(my.offset_constant_test) + log(cv_sets[[i]]$test$df[[my.offset_var_name]] + 1),
+                        newx = cv.sets[[i]]$test$model_matrix,
+                        newoffset = log(my.offset_constant_test) + log(cv.sets[[i]]$test$df[[my.offset_var_name]] + 1),
                         type = "response")
     
     temp_err_matr[, i] <- apply(pred_fit, 2,
-                                function(col) RMSEfun(true_vals = cv_sets[[i]]$test$df[[my.response.name]],
+                                function(col) RMSEfun(true_vals = cv.sets[[i]]$test$df[[my.response.name]],
                                                       pred_vals = col))
     
     rm(temp_fit)
@@ -907,7 +908,7 @@ glmnet.control(mxitnr = 50) # increase maximum no. of IRLS iterations allowed
 ```
 
 ```{r, eval = bool_execute_heavy_chunks}
-models_summary$lasso.poi.noint = Lasso_Offset_CV(cv_sets = month.noint.cv.k4.sets,
+models_summary$lasso.poi.noint = Lasso_Offset_CV(cv.sets = month.noint.cv.k4.sets,
                                           my.lambda.vals = exp(seq(-15, 3, 0.1)) %>% sort(decreasing = TRUE),
                                           my.response.name = "count",
                                           my.family = poisson(),
@@ -917,7 +918,7 @@ models_summary$lasso.poi.noint = Lasso_Offset_CV(cv_sets = month.noint.cv.k4.set
 ```
 
 ```{r, eval = bool_execute_heavy_chunks, warning=FALSE}
-models_summary$lasso.poi = Lasso_Offset_CV(cv_sets = month.yesint.cv.k4.sets,
+models_summary$lasso.poi = Lasso_Offset_CV(cv.sets = month.yesint.cv.k4.sets,
                                           my.lambda.vals = exp(seq(-15, 3, 0.1)) %>% sort(decreasing = TRUE),
                                           my.response.name = "count",
                                           my.family = poisson(),
