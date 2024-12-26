@@ -15,9 +15,9 @@ gc()
 library(tidyverse)
 library(Matrix)
 library(glmnet)
-library(ncvreg)
+# library(ncvreg)
+library(picasso) # sparse model matrix scad and mcp
 library(viridis)
-library(lattice)
 ```
 
 ```{r}
@@ -47,6 +47,8 @@ Remove date and NTA variables, convert to factor location, month and KY_CD.
 ```{r}
 my.df$ARREST_DATE = NULL
 my.df$YEAR = NULL
+my.df$Latitude = NULL
+my.df$Longitude = NULL
 
 my.df$NTA2020 = factor(my.df$NTA2020)
 my.df$MONTH = factor(my.df$MONTH)
@@ -271,18 +273,15 @@ my.df.year.grouped$y = log(my.df.year.grouped$count) - log(my.df.year.grouped$Po
 
 ```{r}
 
-FORMULA.NO.KY_CD = as.formula("count ~. -1 -Pop1 + 
-                            NTA2020:LAW_CAT_CD +
-                            NTA2020:AGE_GROUP +
-                            NTA2020:PERP_SEX +
-                            NTA2020:PERP_RACE")
+FORMULA.YES.INTERACTIONS = as.formula("count ~. -1 -Pop1 + 
+                            NTA2020:LAW_CAT_CD")
 
 FORMULA.NO.INTERACTIONS = as.formula("count ~. -1 -Pop1")
 ```
 
 
 ```{r}
-my.df.year.grouped.matrix = sparse.model.matrix(FORMULA.NO.KY_CD,
+my.df.year.grouped.matrix = sparse.model.matrix(FORMULA.YES.INTERACTIONS,
                                                 my.df.year.grouped)
 ```
 
@@ -317,6 +316,10 @@ MakeMonthCvSets <- function(my_df, month_sets_ind, formula) {
     # here it's the number of months considered
     cv.sets[[i]]$train$offset.constant <- length(setdiff(1:12, ncol(month_sets_ind)))
     
+    cv.sets[[i]]$train$log.ratio = log(cv.sets[[i]]$train$df$count) - # adjust for months and population, take logarithm
+                         log(cv.sets[[i]]$train$df$Pop1 + 1) -
+                         log(cv.sets[[i]]$train$offset.constant)
+    
     
     cv.sets[[i]]$test$df <- GroupByMONTHSets(mydf = my_df,
                                              month_indexes = month_sets_ind[i, ])
@@ -341,7 +344,7 @@ month.noint.cv.k4.sets = MakeMonthCvSets(my_df = my.df,
 # Yes interaction
 month.yesint.cv.k4.sets = MakeMonthCvSets(my_df = my.df,
                        month_sets_ind = month_sets_ind$k4,
-                       formula = FORMULA.NO.KY_CD)
+                       formula = FORMULA.YES.INTERACTIONS)
 
 
 ```
@@ -539,8 +542,6 @@ Elastic_Cv <- function(cv.sets,
   # min error lambda and alpha indexes
   min_indexes = which(cv.err.matr == min(cv.err.matr), arr.ind = TRUE)
   
-  # debug
-  print(min_indexes)
   
   list_summary <- list()
   list_summary[["lambda"]] <- my.lambda.vals
@@ -645,11 +646,26 @@ par(mfrow = c(1,1))
 ### Scad
 
 ```{r}
+# define custom lasso predict function to not print results
+my.predict.gaussian = function (object, newdata, lambda.idx = c(1:3), 
+  ...) 
+{
+  pred.n = nrow(newdata)
+  lambda.n = length(lambda.idx)
+  intcpt = matrix(rep(object$intercept[lambda.idx], pred.n), 
+    nrow = pred.n, ncol = lambda.n, byrow = T)
+  Y.pred = newdata %*% object$beta[, lambda.idx] + intcpt
+  return(Y.pred)
+}
+```
+
+
+```{r}
 # general purpuose MCP or SCAD CV function
 NonConvex_Cv <- function(cv.sets,
                        my.lambda.vals, # decreasing sorted
                        my.gamma.vals,
-                       my.penalty = "MCP") {
+                       my.penalty = "mcp") {
   
   temp.err.array <- array(NA,
                            dim = c(length(my.lambda.vals),
@@ -662,16 +678,28 @@ NonConvex_Cv <- function(cv.sets,
     # cycle over alpha values
     for(j in 1:length(my.gamma.vals)){
       
-    temp_fit <- ncvreg(X = as.matrix(cv.sets[[k]]$train$model_matrix),
-                       y = log(cv.sets[[k]]$train$df$count) - # adjust for months and population, take logarithm
+    # temp_fit <- ncvreg(X = as.matrix(cv.sets[[k]]$train$model_matrix),
+    #                    y = log(cv.sets[[k]]$train$df$count) - # adjust for months and population, take logarithm
+    #                      log(cv.sets[[k]]$train$df$Pop1 + 1) -
+    #                      log(cv.sets[[k]]$train$offset.constant),
+    #                    gamma = my.gamma.vals[j],
+    #                    lambda = my.lambda.vals,
+    #                    penalty = my.penalty)
+      
+    temp_fit = picasso(X = cv.sets[[k]]$train$model_matrix,
+            Y = log(cv.sets[[k]]$train$df$count) - # adjust for months and population, take logarithm
                          log(cv.sets[[k]]$train$df$Pop1 + 1) -
                          log(cv.sets[[k]]$train$offset.constant),
-                       gamma = my.gamma.vals[j],
-                       lambda = my.lambda.vals,
-                       penalty = my.penalty)
+            method = my.penalty,
+            gamma = my.gamma.vals[j],
+            lambda = my.lambda.vals)
     
-    pred_fit <- predict(temp_fit,
-                        X = as.matrix(cv.sets[[k]]$test$model_matrix))
+    # pred_fit <- predict(temp_fit,
+    #                     X = as.matrix(cv.sets[[k]]$test$model_matrix))
+    
+    pred_fit  = my.predict.gaussian(temp_fit,
+                     newdata = cv.sets[[k]]$test$model_matrix,
+                     lambda.idx = 1:length(temp_fit$lambda))
     
     temp.err.array[,j,k] <- apply(pred_fit, 2,
                                 function(col) RMSEfun(true_vals = cv.sets[[k]]$test$df$count,
@@ -718,15 +746,15 @@ NonConvex_Cv <- function(cv.sets,
 ```{r, eval = bool_execute_heavy_chunks}
 models_summary$scad.noint = NonConvex_Cv(cv.sets = month.noint.cv.k4.sets,
                                              my.lambda.vals = exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE),
-                                             my.gamma.vals = seq(2+1e-05, 20, length = 20),
-                                         my.penalty = "SCAD")
+                                             my.gamma.vals = seq(2+1e-05, 10, length = 10),
+                                         my.penalty = "scad")
 ```
 
 ```{r, warning = FALSE, eval = bool_execute_heavy_chunks}
 models_summary$scad = NonConvex_Cv(cv.sets = month.yesint.cv.k4.sets,
                                              my.lambda.vals = exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE),
-                                             my.gamma.vals = seq(2+1e-05, 20, length = 20),
-                                         my.penalty = "SCAD")
+                                             my.gamma.vals = seq(2+1e-05, 10, length = 10),
+                                         my.penalty = "scad")
 
 ```
 
@@ -760,7 +788,7 @@ par(mfrow = c(1,1))
 scad.fit.all = ncvreg(X = as.matrix(my.df.year.grouped.matrix),
                  y = my.df.year.grouped$y,
                  gamma = models_summary$scad$gmin,
-                 penalty = "SCAD")
+                 penalty = "scad")
 
 plot(scad.fit.all, log.l = TRUE)
 abline(v = log(models_summary$scad$lmin), col = "blue", lty = 2, lwd = 2)
@@ -773,15 +801,15 @@ abline(v = log(models_summary$scad$lmin), col = "blue", lty = 2, lwd = 2)
 ```{r, eval = bool_execute_heavy_chunks}
 models_summary$mcp.noint = NonConvex_Cv(cv.sets = month.noint.cv.k4.sets,
                                              my.lambda.vals = exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE),
-                                             my.gamma.vals = seq(1+1e-05, 20, length = 20),
-                                         my.penalty = "MCP")
+                                             my.gamma.vals = seq(2+1e-05, 10, length = 10),
+                                         my.penalty = "mcp")
 ```
 
 ```{r, warning = FALSE, eval = bool_execute_heavy_chunks}
 models_summary$mcp = NonConvex_Cv(cv.sets = month.yesint.cv.k4.sets,
                                              my.lambda.vals = exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE),
-                                             my.gamma.vals = seq(1+1e-05, 20, length = 20),
-                                         my.penalty = "MCP")
+                                             my.gamma.vals = seq(2+1e-05, 10, length = 10),
+                                         my.penalty = "mcp")
 ```
 
 
@@ -814,7 +842,7 @@ par(mfrow = c(1,1))
 mcp.fit.all = ncvreg(X = as.matrix(my.df.year.grouped.matrix),
                  y = my.df.year.grouped$y,
                  gamma = models_summary$mcp$gmin,
-                 penalty = "MCP")
+                 penalty = "mcp")
 
 plot(mcp.fit.all, log.l = TRUE)
 abline(v = log(models_summary$mcp$gmin), col = "blue", lty = 2, lwd = 2)
@@ -908,7 +936,7 @@ Lasso_Offset_CV <- function(cv.sets,
 glmnet.control(mxitnr = 50) # increase maximum no. of IRLS iterations allowed
 ```
 
-```{r, eval = bool_execute_heavy_chunks}
+```{r, eval = bool_execute_heavy_chunks, warning=FALSE}
 models_summary$lasso.poi.noint = Lasso_Offset_CV(cv.sets = month.noint.cv.k4.sets,
                                           my.lambda.vals = exp(seq(-15, 3, 0.1)) %>% sort(decreasing = TRUE),
                                           my.response.name = "count",
@@ -985,7 +1013,7 @@ Elastic_Offset_Cv <- function(cv.sets,
     for(j in 1:length(my.alpha.vals)){
       
     temp_fit <- glmnet(x = cv.sets[[k]]$train$model_matrix,
-                       y = cv.sets[[k]]$train$df$y,
+                       y = cv.sets[[k]]$train$df[[my.response.name]],
                        alpha = my.alpha.vals[j],
                        lambda = my.lambda.vals,
                        family = my.family,
