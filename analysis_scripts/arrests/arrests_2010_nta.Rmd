@@ -20,7 +20,7 @@ source("functions_script.R")
 # assuming the models are been loaded from a RData file before.
 # IMPORTANT: in order to reproduce the result set bool_execute_heavy_chunks = TRUE
 
-bool_execute_heavy_chunks = TRUE
+bool_execute_heavy_chunks = FALSE
 
 file_save_name = "arrests_nta_2010_models_summary.Rdata"
 
@@ -284,6 +284,18 @@ my.df.year.grouped.matrix = sparse.model.matrix(FORMULA.YES.INTERACTIONS,
 
 
 ```{r}
+# NO interaction
+month.noint.cv.k4.sets = suppressMessages(MakeMonthCvSets(my_df = my.df,
+                       month_sets_ind = month_sets_ind$k4,
+                       formula = FORMULA.NO.INTERACTIONS))
+# Yes interaction
+month.yesint.cv.k4.sets = suppressMessages(MakeMonthCvSets(my_df = my.df,
+                       month_sets_ind = month_sets_ind$k4,
+                       formula = FORMULA.YES.INTERACTIONS))
+```
+
+
+```{r}
 # error functions
 RMSEfun = function(true_vals, pred_vals){
   sqrt(mean( (true_vals - pred_vals)^2 ))
@@ -297,12 +309,12 @@ The simplest assumption is to assume a linear (monotone) trend of the response a
 
 ### LASSO
 
-```{r}
+```{r, eval = bool_execute_heavy_chunks}
 models_summary$lasso.noint <- Lasso_CV(month.noint.cv.k4.sets,
                                         my.lambda.vals = exp(seq(-17, -6, 0.1)) %>% sort(decreasing = T))
 ```
 
-```{r}
+```{r, eval = bool_execute_heavy_chunks}
 models_summary$lasso <- Lasso_CV(month.yesint.cv.k4.sets,
                                         my.lambda.vals = exp(seq(-13, -6, 0.1)) %>% sort(decreasing = T))
 ```
@@ -338,7 +350,7 @@ par(mfrow = c(1,1))
 ### Elasticnet
 
 
-```{r}
+```{r,eval = bool_execute_heavy_chunks}
 models_summary$elasticnet.noint = Elastic_Cv(cv.sets = month.noint.cv.k4.sets,
                                              my.lambda.vals = exp(seq(-20, -8, 0.1)) %>% sort(decreasing = TRUE),
                                              my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 20))
@@ -638,7 +650,7 @@ models_summary$lasso.negbin = LASSO_NegBin_Offset_Cv(cv.sets = month.yesint.cv.k
                                                         my.theta.vals = seq(1e-5, 20, length = 20))
 ```
 
-```{r}
+```{r, eval = bool_execute_heavy_chunks}
 par(mfrow = c(1,2))
 
 TwoParErrPlot(model_list = models_summary$lasso.negbin.noint,
