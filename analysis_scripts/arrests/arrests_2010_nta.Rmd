@@ -1,5 +1,5 @@
 ---
-title: "Arrests 2010 NTA analysis"
+title: "Arrests 2010 NTA: Analisi"
 output: pdf_document
 ---
 
@@ -20,7 +20,7 @@ source("functions_script.R")
 # assuming the models are been loaded from a RData file before.
 # IMPORTANT: in order to reproduce the result set bool_execute_heavy_chunks = TRUE
 
-bool_execute_heavy_chunks = FALSE
+bool_execute_heavy_chunks = TRUE
 
 file_save_name = "arrests_nta_2010_models_summary.Rdata"
 
@@ -34,14 +34,15 @@ if(!bool_execute_heavy_chunks){
 }
 ```
 
-## Preprocessing
+
 ```{r}
+# Preprocessing -------------------------------------
 # read the data
 my.df = read.csv("../../data/final_datasets/arrests_2010_nta.csv", stringsAsFactors = T)
 ```
 
 Remove date and NTA variables, convert to factor location, month and KY_CD.
-```{r}
+```{r, message=FALSE}
 my.df$ARREST_DATE = NULL
 my.df$YEAR = NULL
 my.df$Latitude = NULL
@@ -53,81 +54,94 @@ my.df$MONTH = factor(my.df$MONTH)
 # add NA category
 my.df$KY_CD = ifelse(is.na(my.df$KY_CD), "MISSING", my.df$KY_CD)
 my.df$KY_CD = factor(my.df$KY_CD)
-```
 
-
-```{r}
 str(my.df)
-```
 
-Check for NA
-```{r}
+# check for NA
 apply(my.df, 2, function(col) (sum(is.na(col))))
-```
 
-
-A possibility is to get rid of all NAs rows, the portion of deleted rows would be relatively small (of course we're introducing some bias here).
-```{r}
+# the ratio is high
 nrow(na.omit(my.df)) / nrow(my.df)
-```
-Other possibilities would be to impute values for numerical variables (using median, mean or more sofisticated methods).
-For simplicity we just delete missing values rows.
-```{r}
+
+# delete missing values
 my.df = na.omit(my.df)
 ```
 
 
-## Description
+## Descrizione
 
-Ideally 2010 data are our training set and 2011 data are the test set.
-The goal of the analysis is to identify is some covariates are correlated with the arrests rate: more specifically if the response is well explained by some non spatial covariates alone, some spatial alone or interaction between the two.
+L'obbiettivo di questa sezione di analisi è verificare se esiste un sottoinsieme di variabili esplicative particolarmente correlate con il numero di arresti, sia marginalmente che considerando l'interazione con ciascuna zona spaziale (NTA).
+Per vincoli computazionali si riduce l'insieme di stima al solo anno 2010: per quest'anno i dati del censo sono esatti e non si sono verificati eventi rari a differenza del 2020 (Covid); l'insieme di verifica scelto è l'anno 2011, in quanto è l'anno più vicino al 2010 (l'assunzione è che i due anni siano abbastanza simili per il fenomeno considerato).
 
-A reasonable response variable would be the count of arrests divided by the local (space zone) population, also grouping by any other covariates value.
+### Variabili considerate
+
+Viene riportata la lista delle variabili considerate con una breve descrizione.
+
+Le variabili considerate dal dataset arrests sono:
+
+- KY_CD (fattore con 70 livelli): categoria granulare del crimine causa dell'arresto
+- LAW_CAT_CD (fattore con 5 livelli): categoriea generale del crimine causa dell'arresto
+- AGE_GROUP (fattore con 5 livelli): classe d'età dell'arrestato
+- PERP_SEX  (fattore con 2 livelli): sesso dell'arrestato
+- PERP_RACE (fattore con 7 livelli): etnia dell'arrestato
+- NTA2020 (fattore con 251 livelli): indicatore della specifica NTA del luogo dell'arresto
+- MONTH (fattore con 12 livelli): indicatore del mese dell'arresto
+
+Le variabili considerate dal censo sono:
+- Pop1 (numerica): popolazione per NTA
+- MaleP (numerica): percentuale di maschi per NTA
+- MdAge (numerica): età mediana per NTA
+- Hsp1P (numerica): percentuale di ispanici per NTA
+- WNHP (numerica): percentuale di bianchi non ispanici (NH) per NTA
+- BNHP (numerica): percentuale di neri non ispanici per NTA
+- ANHP (numerica): percentuale di asiatici non ispanici per NTA
+- OthNHP (numerica): percentuale di altre etnie non ispaniche per NTA
+- MIncome (numerica): reddito mediano per NTA
 
 
+### Problematiche
 
-To get an idea of the dataset used on which models are tested a
+Questi dati presentano diverse problematiche.
+
+Le scelte fatte sono dovute a fattori computazionali, di tempo e al fatto che per permettere conteggi diversi da 1 è necessario considerare zone spaziali e intervalli temporali non eccessivamente ristretti.
+
+Per selezione delle variabili di stratificazione per zona da includere, benchè il censo fornisca molte variabili si è scelto di considerarne solo un esiguo sottoinsieme: ciò è dovuto a una mancanza di conoscenza di campo e al non poter dedicare eccessivo tempo alla selezione ed in particolare all'estrazione delle stesse dai varia database e fogli di calcolo.
+
+Per la definizione delle zone spaziali e degli intervalli temporali.
+Inizialmente si era pensato di eseguire le analisi sull'unità spaziale più piccola disponibile per cui sono presenti i dati del censo: i "Census Tracts" (CT) che per New York sono più di 2000 zone distinte (a differenza delle 250 degli NTA), si è però subito verificato che con i mezzi a disposizione lavorare su modelli con i CT era improponibile a causa delle eccessive risorse computazionali richieste. Per quanto concerne gli intervalli temporali si è scelto di ignorare i possibili trend e considerare i singoli anni, per ciascun anno si sono utilizzati i mesi per la costruzione degli insiemi di convalida incrociata. Pur avendo a disposizione il giorno di ciascun arresto la selezione dei mesi è apparsa come un giusto compromesso per garantire dei conteggi superiori a 1.
+
+Pur avendo notevolmente ridotto la potenziale complessità del problema il numero di osservazioni e il numero di modalità dei fattori alcune procedure impiegate possono comunque molto tempo (sulle piattaforme di calcolo impiegate) per essere eseguite: questi limiti rendono proibitive valutazioni dell'incertezza nelle stime, quali metodi bootstrap o bayesiani.
+
+Poichè i conteggi sono costruiti raggruppando le osservazioni con le stesse combinazioni di modalità delle covariate, il conteggio minimo osservabile è uguale a 1.
+Ciò pone dei possibili problemi nella stima di modelli che comprendono lo zero nel supporto (ad esempio il modello di Poisson). Si è comunque provato ad adattare modelli (sia a risposta continua che discreta) su questa tipologia di dati, una delle possibili soluzioni al di fuori di impiegare modelli diversi è la metodologia "zero padding" in cui per ogni combinazione di variabili per cui non si verificano casi si aggiunge un'osservazione con conteggio nullo: la criticità qui è computazionale dovuta all'incremento notevole delle osservazioni.
+
+
 ```{r}
-year_grouped = my.df %>%
+year_grouped = suppressMessages(my.df %>%
   dplyr::select(-"MONTH") %>% 
   group_by_all() %>% 
-  summarise(count = n())
-
-# define the arrest rate (count / population)
-year_grouped$y =  year_grouped$count / year_grouped$Pop1
+  summarise(count = n()))
 
 ```
 
-```{r}
-dim(year_grouped)
-colnames(year_grouped)
-```
 Still a huge number of observations compared to the number of variables, but what if we add interactions?
 
-Let's look at the distribution of the counts.
-```{r}
-year_grouped$count %>%
-  table %>% 
-  plot(main = "Arrests counts grouped by all covariates observed combinations",
-       xlab = "arrest count",
-       ylab = "absolute frequency")
-```
-We can see an inflation of ones.
-The ratios present a similar frequency table. Taking the logarithm of the ratio the distribution is still (a bit less) skewed.
+
+A sinistra i conteggi di arresti raggruppati per valori di covariate e a destra il logaritmo della medesima quantità
 ```{r}
 par(mfrow = c(1,2))
 
-year_grouped$y %>%
+year_grouped$count %>%
   table %>% 
   plot(main = "Arrests ratio grouped by covariates",
-       xlab = "number of arrests / nta population",
+       xlab = "number of arrests",
        ylab = "absolute frequency")
 
-year_grouped$y %>% 
+year_grouped$count %>% 
   log %>% 
   table %>% 
-  plot(main = " log arrests ratio grouped by covariates",
-       xlab = "log(number of arrests / nta population)",
+  plot(main = " log arrests count grouped by covariates",
+       xlab = "log(arrests count)",
        ylab = "absolute frequency")
 
 par(mfrow = c(1,1))
@@ -156,70 +170,50 @@ par(mfrow = c(1,1))
 
 ```
 
+### Elevata dimensionalità
 
-Let's count the hypothetical number of interaction terms if ones considers only interactions between spatial zones and selected arrests covariates along with the obervations /  number of parameter ratio (underestimate since there are other variables):
+I dati presentano elevata dimensionalità considerando le interazioni tra la variabile spaziale (NTA) e le covariate (qualitative) di arrests.
+E' comunque interessante provare i metodi di selezione delle variabili anche sui dati senza interazioni.
+
+Per avere delle misure quantitative si considera il dataset in cui si sono definiti i conteggi senza considerare i mesi: si riporta il rapporto tra il numero di osservazioni (righe) e il prodotto tra il numero di modalità di NTA e la somma delle modalità delle variabili qualitative di arrests.
+
 ```{r}
 var_unique_len = apply(year_grouped,
                        2,
                        function(col) length(unique(col)))
-
-var_unique_len
 ```
 
-Not including KY_CD:
-```{r}
-var_unique_len["NTA2020"] *
-  sum(var_unique_len[c("LAW_CAT_CD", "AGE_GROUP", "PERP_SEX", "PERP_RACE")])
-
+Senza considerare KY_CD (esplicative non spaziale di arrest con più modalità) il rapporto è:
+```{r, include = TRUE}
 nrow(year_grouped) / (var_unique_len["NTA2020"] *
   sum(var_unique_len[c("LAW_CAT_CD", "AGE_GROUP", "PERP_SEX", "PERP_RACE")]))
 ```
 
-Including KY_CD
-```{r}
-var_unique_len["NTA2020"] *
-  sum(var_unique_len[c("KY_CD","LAW_CAT_CD", "AGE_GROUP",
-                       "PERP_SEX", "PERP_RACE")])
-
+Considerando anche KY_CD il rapporto è:
+```{r, include=TRUE}
 nrow(year_grouped) / (var_unique_len["NTA2020"] *
   sum(var_unique_len[c("KY_CD", "LAW_CAT_CD", "AGE_GROUP",
                        "PERP_SEX", "PERP_RACE")]))
 ```
-We decide to not employ the MONTH time variable as a covariate but use it for a model selection method.
-This is because in order to get a count measure one aggregation criterion is needed, here aggregation by month is chosen.
 
 
-### Variables description
-
-Original dataset selected variables:
-
-Census stratification variables:
-
-
-## Explorative analysis
-
-### Arrests count vs month
+Poichè dopo alcune prove le procedure si sono rivelate troppo onerose includendo KY_CD si è deciso di rimuoverla sperando che l'informazione fornita da LAW_CAT_CD sia sufficiente.
 ```{r}
-my.df %>% 
-  group_by_at(vars(MONTH)) %>%
-  summarise(count = n()) %>% 
-  plot(main = "Arrests count by month")
+my.df$KY_CD = NULL
 ```
 
+## Modelli
 
-### Arrests counts vs NTA
+### Criterio di selezione dei parametri di regolazione
 
-### Arrest counts vs other covariates
+Come già accennato, i parametri di regolazione sono selezionati tramite convalida incrociata (CV) impiegando i mesi per la costruzione degli insiemi.
 
-## Models
+La procedura per la costruzione degli insiemi è la seguente:
+- Selezione di k: il numero di insiemi di convalida (ad esempio k = 4)
+- Ogni insieme di convalida è composto da osservazioni raggruppate di 12 / k (3) mesi e i mesi rimanenti (9) vengono utilizzati per adattare il modello.
+- Per cercare di compensare e mediare le fluttuazioni stagionali, i mesi di validazione sono scelti il più distanziati possibile. Ad esempio, nel caso di k = 4, il primo insieme di validazione è (gennaio, maggio, settembre), il secondo set è (febbraio, giugno, ottobre), il terzo è (marzo, luglio, novembre) e il quarto è (aprile, agosto, dicembre).
+- Per rendere ogni risposta comparabile avendo utilizzato un numero diverso di mesi, una nuova risposta è definita come il rapporto degli arresti diviso per il numero di mesi utilizzati nel raggruppamento (ovvero l'esponziale dell 'offset nel modello di Poisson).
 
-### Model selection method
-
-Given the previously described constraints, in order to be able to apply a cross validation (CV) selection method we choose to ignore the time (MONTH) factor using MONTH as index to create the CV folds as described below.
-Choose k: the number of validation sets (example k = 4) each validation set is made by grouped observations of 12 / k (3) months and the months left (9) are used to fit the model. To try to compensate and average for seasonal fluctuations the validation months are chosen as spaced as possible, for example, in the case k = 4 the first validation set is (january, may, september), the second set is (february, june, october), the third is (march, july, november) and the forth is (april, august, december); in order to make each response comparable having used a different number of months a new response is defined as the arrests ratio divided by the number of months used in the grouping. Note: this is also a way to reduce the computational burden compared to using many more months combinations.
-
-
-Define Month indexes
 ```{r}
 # months indexes sets
 # each list contains a matrix where each row contains the used indexes
@@ -240,21 +234,14 @@ month_sets_ind = list(k4 = matrix(c(1, 5, 9,
                                   nrow = 6))
 ```
 
-In order to simplify computations we remove the KY_CD variable (hoping LAW_CAT_CD will be sufficient to describe the crime type)
+### Modelli Continui
+
 when using a linear model (assuming gaussian errors) we consider the response as: 
 $y = \log(\text{count} / \text{population})$ where each count is the events count obtained by grouping by all other covariates and each population is specific to each NTA.
-```{r, warning=FALSE}
-my.df$KY_CD = NULL
-
-my.df.year.grouped = my.df %>%
-  dplyr::select(-MONTH) %>% 
-  group_by_all() %>% 
-  summarise(count = n())
 
 
-# take the log to 
-my.df.year.grouped$y = log(my.df.year.grouped$count) - log(my.df.year.grouped$Pop1 + 1) - log(12)
-```
+### Matrice del modello
+
 
 ```{r}
 
@@ -265,11 +252,21 @@ FORMULA.NO.INTERACTIONS = as.formula("count ~. -1")
 ```
 
 
+
+
+```{r, warning=FALSE}
+
+my.df.year.grouped = suppressMessages(my.df %>%
+  dplyr::select(-MONTH) %>% 
+  group_by_all() %>% 
+  summarise(count = n()))
+
+```
+
 ```{r}
 my.df.year.grouped.matrix = sparse.model.matrix(FORMULA.YES.INTERACTIONS,
                                                 my.df.year.grouped)
 ```
-
 
 ```{r}
 # NO interaction
@@ -282,13 +279,6 @@ month.yesint.cv.k4.sets = suppressMessages(MakeMonthCvSets(my_df = my.df,
                        formula = FORMULA.YES.INTERACTIONS))
 ```
 
-
-```{r}
-# error functions
-RMSEfun = function(true_vals, pred_vals){
-  sqrt(mean( (true_vals - pred_vals)^2 ))
-}
-```
 
 
 ### Note on quantitative covariates

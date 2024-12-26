@@ -144,12 +144,12 @@ FORMULA.NO.INTERACTIONS = as.formula("count ~. -1")
 ```{r}
 # NO interaction
 year.noint.cv.k10.sets = suppressMessages(MakeYearCvSets(my_df = my.df,
-                       year_sets_ind = month_sets_ind$k4,
+                       year_sets_ind = year_sets_ind$k10,
                        formula = FORMULA.NO.INTERACTIONS,
                        all_years_set = 2010:2019))
 # Yes interaction
 year.yesint.cv.k10.sets = suppressMessages(MakeyearCvSets(my_df = my.df,
-                       year_sets_ind = month_sets_ind$k4,
+                       year_sets_ind = year_sets_ind$k10,
                        formula = FORMULA.YES.INTERACTIONS,
                        all_years_set = 2010:2019))
 ```
