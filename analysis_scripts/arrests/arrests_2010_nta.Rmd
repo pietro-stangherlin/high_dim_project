@@ -297,8 +297,6 @@ RMSEfun = function(true_vals, pred_vals){
 ```
 
 ```{r, warning=FALSE, message=FALSE}
-library(glmnet)
-library(dplyr)
 
 # Function to create cross-validation sets
 MakeMonthCvSets <- function(my_df, month_sets_ind, formula) {
