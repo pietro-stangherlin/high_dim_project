@@ -1,5 +1,5 @@
 ---
-title: "Arrests 2010 NTA analysis"
+title: "Arrests 2010-2019 NTA analysis"
 output: pdf_document
 ---
 
@@ -20,9 +20,9 @@ source("functions_script.R")
 # assuming the models are been loaded from a RData file before.
 # IMPORTANT: in order to reproduce the result set bool_execute_heavy_chunks = TRUE
 
-bool_execute_heavy_chunks = FALSE
+bool_execute_heavy_chunks = TRUE
 
-file_save_name = "arrests_nta_2010_models_summary.Rdata"
+file_save_name = "arrests_nta_2010_2019_models_summary.Rdata"
 
 # require loading models_summary list
 if(!bool_execute_heavy_chunks){
@@ -37,18 +37,19 @@ if(!bool_execute_heavy_chunks){
 ## Preprocessing
 ```{r}
 # read the data
-my.df = read.csv("../../data/final_datasets/arrests_2010_nta.csv", stringsAsFactors = T)
+my.df = read.csv("../../data/final_datasets/arrests_2010_2020_nta.csv", stringsAsFactors = T)
+
+my.df = my.df %>% filter(YEAR != 2020)
 ```
 
 Remove date and NTA variables, convert to factor location, month and KY_CD.
 ```{r}
-my.df$ARREST_DATE = NULL
-my.df$YEAR = NULL
+# my.df$YEAR = factor(my.df$YEAR)
 my.df$Latitude = NULL
 my.df$Longitude = NULL
 
 my.df$NTA2020 = factor(my.df$NTA2020)
-my.df$MONTH = factor(my.df$MONTH)
+my.df$MONTH = NULL
 
 # add NA category
 my.df$KY_CD = ifelse(is.na(my.df$KY_CD), "MISSING", my.df$KY_CD)
@@ -58,11 +59,6 @@ my.df$KY_CD = factor(my.df$KY_CD)
 
 ```{r}
 str(my.df)
-```
-
-Check for NA
-```{r}
-apply(my.df, 2, function(col) (sum(is.na(col))))
 ```
 
 
@@ -87,106 +83,6 @@ A reasonable response variable would be the count of arrests divided by the loca
 
 
 To get an idea of the dataset used on which models are tested a
-```{r}
-year_grouped = my.df %>%
-  dplyr::select(-"MONTH") %>% 
-  group_by_all() %>% 
-  summarise(count = n())
-
-# define the arrest rate (count / population)
-year_grouped$y =  year_grouped$count / year_grouped$Pop1
-
-```
-
-```{r}
-dim(year_grouped)
-colnames(year_grouped)
-```
-Still a huge number of observations compared to the number of variables, but what if we add interactions?
-
-Let's look at the distribution of the counts.
-```{r}
-year_grouped$count %>%
-  table %>% 
-  plot(main = "Arrests counts grouped by all covariates observed combinations",
-       xlab = "arrest count",
-       ylab = "absolute frequency")
-```
-We can see an inflation of ones.
-The ratios present a similar frequency table. Taking the logarithm of the ratio the distribution is still (a bit less) skewed.
-```{r}
-par(mfrow = c(1,2))
-
-year_grouped$y %>%
-  table %>% 
-  plot(main = "Arrests ratio grouped by covariates",
-       xlab = "number of arrests / nta population",
-       ylab = "absolute frequency")
-
-year_grouped$y %>% 
-  log %>% 
-  table %>% 
-  plot(main = " log arrests ratio grouped by covariates",
-       xlab = "log(number of arrests / nta population)",
-       ylab = "absolute frequency")
-
-par(mfrow = c(1,1))
-```
-
-
-
-```{r}
-# to include zeros
-# cols_to_complete = colnames(my.df)
-# cols_to_complete = setdiff(cols_to_complete, "MONTH")
-# 
-# # Create a data frame with all combinations of the columns
-# all_combinations <- expand_grid(!!!syms(cols_to_complete))
-# 
-# # Summarize the data and complete with zeros
-# year_grouped_zeros <- my.df %>%
-#   select(-MONTH) %>%
-#   group_by(across(all_of(cols_to_complete))) %>%
-#   summarise(count = n(), .groups = 'drop') %>%
-#   ungroup() %>%
-#   right_join(all_combinations, by = cols_to_complete) %>%
-#   replace_na(list(count = 0))
-# 
-# print(year_grouped_zeros)
-
-```
-
-
-Let's count the hypothetical number of interaction terms if ones considers only interactions between spatial zones and selected arrests covariates along with the obervations /  number of parameter ratio (underestimate since there are other variables):
-```{r}
-var_unique_len = apply(year_grouped,
-                       2,
-                       function(col) length(unique(col)))
-
-var_unique_len
-```
-
-Not including KY_CD:
-```{r}
-var_unique_len["NTA2020"] *
-  sum(var_unique_len[c("LAW_CAT_CD", "AGE_GROUP", "PERP_SEX", "PERP_RACE")])
-
-nrow(year_grouped) / (var_unique_len["NTA2020"] *
-  sum(var_unique_len[c("LAW_CAT_CD", "AGE_GROUP", "PERP_SEX", "PERP_RACE")]))
-```
-
-Including KY_CD
-```{r}
-var_unique_len["NTA2020"] *
-  sum(var_unique_len[c("KY_CD","LAW_CAT_CD", "AGE_GROUP",
-                       "PERP_SEX", "PERP_RACE")])
-
-nrow(year_grouped) / (var_unique_len["NTA2020"] *
-  sum(var_unique_len[c("KY_CD", "LAW_CAT_CD", "AGE_GROUP",
-                       "PERP_SEX", "PERP_RACE")]))
-```
-We decide to not employ the MONTH time variable as a covariate but use it for a model selection method.
-This is because in order to get a count measure one aggregation criterion is needed, here aggregation by month is chosen.
 
 
 ### Variables description
@@ -197,15 +93,6 @@ Census stratification variables:
 
 
 ## Explorative analysis
-
-### Arrests count vs month
-```{r}
-my.df %>% 
-  group_by_at(vars(MONTH)) %>%
-  summarise(count = n()) %>% 
-  plot(main = "Arrests count by month")
-```
-
 
 ### Arrests counts vs NTA
 
@@ -218,43 +105,31 @@ my.df %>%
 Given the previously described constraints, in order to be able to apply a cross validation (CV) selection method we choose to ignore the time (MONTH) factor using MONTH as index to create the CV folds as described below.
 Choose k: the number of validation sets (example k = 4) each validation set is made by grouped observations of 12 / k (3) months and the months left (9) are used to fit the model. To try to compensate and average for seasonal fluctuations the validation months are chosen as spaced as possible, for example, in the case k = 4 the first validation set is (january, may, september), the second set is (february, june, october), the third is (march, july, november) and the forth is (april, august, december); in order to make each response comparable having used a different number of months a new response is defined as the arrests ratio divided by the number of months used in the grouping. Note: this is also a way to reduce the computational burden compared to using many more months combinations.
 
+```{r}
+# Groub by months indexes
+GroupByMONTHSets = function(mydf, month_indexes){
+  month_grouped = mydf %>%
+    filter(MONTH %in% month_indexes) %>% 
+    dplyr::select(-MONTH) %>% 
+  group_by_all() %>% 
+  summarise(count = n())
+  
+  return(month_grouped)
+}
+```
 
 Define Month indexes
 ```{r}
 # months indexes sets
 # each list contains a matrix where each row contains the used indexes
-month_sets_ind = list(k4 = matrix(c(1, 5, 9,
-                                    2, 6, 10,
-                                    3, 7, 11,
-                                    4, 8, 12),
+year_sets_ind = list(k10 = matrix(2010:2019,
                                   byrow = T,
-                                  nrow = 4),
-                      
-                      k6 = matrix(c(1, 7,
-                                    2, 8,
-                                    3, 9,
-                                    4, 10,
-                                    5, 11,
-                                    6, 12),
-                                  byrow = T,
-                                  nrow = 6))
+                                  nrow = 10))
 ```
 
 In order to simplify computations we remove the KY_CD variable (hoping LAW_CAT_CD will be sufficient to describe the crime type)
 when using a linear model (assuming gaussian errors) we consider the response as: 
 $y = \log(\text{count} / \text{population})$ where each count is the events count obtained by grouping by all other covariates and each population is specific to each NTA.
-```{r, warning=FALSE}
-my.df$KY_CD = NULL
-
-my.df.year.grouped = my.df %>%
-  dplyr::select(-MONTH) %>% 
-  group_by_all() %>% 
-  summarise(count = n())
-
-
-# take the log to 
-my.df.year.grouped$y = log(my.df.year.grouped$count) - log(my.df.year.grouped$Pop1 + 1) - log(12)
-```
 
 ```{r}
 
@@ -265,21 +140,18 @@ FORMULA.NO.INTERACTIONS = as.formula("count ~. -1")
 ```
 
 
-```{r}
-my.df.year.grouped.matrix = sparse.model.matrix(FORMULA.YES.INTERACTIONS,
-                                                my.df.year.grouped)
-```
-
 
 ```{r}
 # NO interaction
-month.noint.cv.k4.sets = suppressMessages(MakeMonthCvSets(my_df = my.df,
-                       month_sets_ind = month_sets_ind$k4,
-                       formula = FORMULA.NO.INTERACTIONS))
+year.noint.cv.k10.sets = suppressMessages(MakeYearCvSets(my_df = my.df,
+                       year_sets_ind = month_sets_ind$k4,
+                       formula = FORMULA.NO.INTERACTIONS,
+                       all_years_set = 2010:2019))
 # Yes interaction
-month.yesint.cv.k4.sets = suppressMessages(MakeMonthCvSets(my_df = my.df,
-                       month_sets_ind = month_sets_ind$k4,
-                       formula = FORMULA.YES.INTERACTIONS))
+year.yesint.cv.k10.sets = suppressMessages(MakeyearCvSets(my_df = my.df,
+                       year_sets_ind = month_sets_ind$k4,
+                       formula = FORMULA.YES.INTERACTIONS,
+                       all_years_set = 2010:2019))
 ```
 
 
@@ -298,12 +170,12 @@ The simplest assumption is to assume a linear (monotone) trend of the response a
 ### LASSO
 
 ```{r, eval = bool_execute_heavy_chunks}
-models_summary$lasso.noint <- Lasso_CV(month.noint.cv.k4.sets,
+models_summary$lasso.noint <- Lasso_CV(year.noint.cv.k10.sets,
                                         my.lambda.vals = exp(seq(-17, -6, 0.1)) %>% sort(decreasing = T))
 ```
 
 ```{r, eval = bool_execute_heavy_chunks}
-models_summary$lasso <- Lasso_CV(month.yesint.cv.k4.sets,
+models_summary$lasso <- Lasso_CV(year.yesint.cv.k10.sets,
                                         my.lambda.vals = exp(seq(-13, -6, 0.1)) %>% sort(decreasing = T))
 ```
 
@@ -339,14 +211,14 @@ par(mfrow = c(1,1))
 
 
 ```{r,eval = bool_execute_heavy_chunks}
-models_summary$elasticnet.noint = Elastic_Cv(cv.sets = month.noint.cv.k4.sets,
+models_summary$elasticnet.noint = Elastic_Cv(cv.sets = year.noint.cv.k10.sets,
                                              my.lambda.vals = exp(seq(-20, -8, 0.1)) %>% sort(decreasing = TRUE),
                                              my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 20))
 ```
 
 ```{r, eval = bool_execute_heavy_chunks}
 
-models_summary$elasticnet = Elastic_Cv(cv.sets = month.yesint.cv.k4.sets,
+models_summary$elasticnet = Elastic_Cv(cv.sets = year.yesint.cv.k10.sets,
                                              my.lambda.vals = exp(seq(-20, -8, 0.1)) %>% sort(decreasing = TRUE),
                                              my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 20))
 ```
@@ -381,11 +253,11 @@ par(mfrow = c(1,1))
 
 Pur avendo provato a considerare solo il modello senza interazioni, a causa dell'eccessivo tempo computazionale richiesto non è qui riportato.
 ```{r}
-A = colnames(month.noint.cv.k4.sets[[1]]$train$df)
+A = colnames(year.noint.cv.k10.sets[[1]]$train$df)
 # Create a named vector to map prefixes to values
 prefix_to_value <- setNames(seq_along(A), A) 
 
-B = colnames(month.noint.cv.k4.sets[[1]]$train$model_matrix)
+B = colnames(year.noint.cv.k10.sets[[1]]$train$model_matrix)
 
 # Create indexes vector
 var_indexes <- sapply(B, function(item) {
@@ -397,7 +269,7 @@ var_indexes <- sapply(B, function(item) {
 
 
 ```{r}
-# models_summary$glasso = GLasso_CV(month.noint.cv.k4.sets,
+# models_summary$glasso = GLasso_CV(year.noint.cv.k10.sets,
 #                                         my.lambda.vals = exp(seq(-17, -6, 0.1)) %>% sort(decreasing = T),
 #                                   group_index = var_indexes)
 ```
@@ -406,14 +278,14 @@ var_indexes <- sapply(B, function(item) {
 ### Scad
 
 ```{r, eval = bool_execute_heavy_chunks}
-models_summary$scad.noint = NonConvex_Cv(cv.sets = month.noint.cv.k4.sets,
+models_summary$scad.noint = NonConvex_Cv(cv.sets = year.noint.cv.k10.sets,
                                              my.lambda.vals = exp(seq(-5, 15, 0.2)) %>% sort(decreasing = TRUE),
                                              my.gamma.vals = seq(2+1e-05, 10, length = 10),
                                          my.penalty = "scad")
 ```
 
 ```{r, warning = FALSE, eval = bool_execute_heavy_chunks}
-models_summary$scad = NonConvex_Cv(cv.sets = month.yesint.cv.k4.sets,
+models_summary$scad = NonConvex_Cv(cv.sets = year.yesint.cv.k10.sets,
                                              my.lambda.vals = exp(seq(-1, 10, 0.2)) %>% sort(decreasing = TRUE),
                                              my.gamma.vals = seq(2+1e-05, 10, length = 10),
                                          my.penalty = "scad")
@@ -461,14 +333,14 @@ par(mfrow = c(1,1))
 ### MCP
 
 ```{r, eval = bool_execute_heavy_chunks}
-models_summary$mcp.noint = NonConvex_Cv(cv.sets = month.noint.cv.k4.sets,
+models_summary$mcp.noint = NonConvex_Cv(cv.sets = year.noint.cv.k10.sets,
                                              my.lambda.vals = exp(seq(-5, 5, 0.2)) %>% sort(decreasing = TRUE),
                                              my.gamma.vals = seq(2+1e-05, 10, length = 10),
                                          my.penalty = "mcp")
 ```
 
 ```{r, warning = FALSE, eval = bool_execute_heavy_chunks}
-models_summary$mcp = NonConvex_Cv(cv.sets = month.yesint.cv.k4.sets,
+models_summary$mcp = NonConvex_Cv(cv.sets = year.yesint.cv.k10.sets,
                                              my.lambda.vals = exp(seq(-5, 5, 0.2)) %>% sort(decreasing = TRUE),
                                              my.gamma.vals = seq(2+1e-05, 10, length = 10),
                                          my.penalty = "mcp")
@@ -530,13 +402,13 @@ glmnet.control(mxitnr = 50) # increase maximum no. of IRLS iterations allowed
 ```
 
 ```{r, eval = bool_execute_heavy_chunks, warning=FALSE}
-models_summary$lasso.poi.noint = Lasso_Offset_CV(cv.sets = month.noint.cv.k4.sets,
+models_summary$lasso.poi.noint = Lasso_Offset_CV(cv.sets = year.noint.cv.k10.sets,
                                           my.lambda.vals = exp(seq(-15, 3, 0.1)) %>% sort(decreasing = TRUE),
                                           my.family = poisson())
 ```
 
 ```{r, eval = bool_execute_heavy_chunks, warning=FALSE}
-models_summary$lasso.poi = Lasso_Offset_CV(cv.sets = month.yesint.cv.k4.sets,
+models_summary$lasso.poi = Lasso_Offset_CV(cv.sets = year.yesint.cv.k10.sets,
                                           my.lambda.vals = exp(seq(-15, 3, 0.1)) %>% sort(decreasing = TRUE),
                                           my.family = poisson())
 ```
@@ -577,14 +449,14 @@ save(models_summary, file = file_save_name)
 ### Poisson Elasticnet
 
 ```{r, warning=FALSE, eval = bool_execute_heavy_chunks}
-models_summary$elasticnet.poi.noint = Elastic_Offset_Cv(cv.sets = month.noint.cv.k4.sets,
+models_summary$elasticnet.poi.noint = Elastic_Offset_Cv(cv.sets = year.noint.cv.k10.sets,
                                                         my.lambda.vals = exp(seq(-10, 2, 0.2)) %>% sort(decreasing = TRUE),
                                                         my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 20),
                                                         my.family = poisson())
 ```
 
 ```{r, warning=FALSE, eval = bool_execute_heavy_chunks}
-models_summary$elasticnet.poi = Elastic_Offset_Cv(cv.sets = month.yesint.cv.k4.sets,
+models_summary$elasticnet.poi = Elastic_Offset_Cv(cv.sets = year.yesint.cv.k10.sets,
                                                         my.lambda.vals = exp(seq(-10, 2, 0.2)) %>% sort(decreasing = TRUE),
                                                         my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 20),
                                                         my.family = poisson())
@@ -627,13 +499,13 @@ In the R parameterization adopted $\theta = 1/\tau$ which becomes another tuning
 
 
 ```{r, warning=FALSE, eval = bool_execute_heavy_chunks}
-models_summary$lasso.negbin.noint = LASSO_NegBin_Offset_Cv(cv.sets = month.noint.cv.k4.sets,
+models_summary$lasso.negbin.noint = LASSO_NegBin_Offset_Cv(cv.sets = year.noint.cv.k10.sets,
                                                         my.lambda.vals = exp(seq(-3, 5, 0.2)) %>% sort(decreasing = TRUE),
                                                         my.theta.vals = seq(1e-5, 3, length = 20))
 ```
 
 ```{r, warning=FALSE, eval = bool_execute_heavy_chunks}
-models_summary$lasso.negbin = LASSO_NegBin_Offset_Cv(cv.sets = month.yesint.cv.k4.sets,
+models_summary$lasso.negbin = LASSO_NegBin_Offset_Cv(cv.sets = year.yesint.cv.k10.sets,
                                                         my.lambda.vals = exp(seq(-10, 2, 0.2)) %>% sort(decreasing = TRUE),
                                                         my.theta.vals = seq(1e-5, 20, length = 20))
 ```
