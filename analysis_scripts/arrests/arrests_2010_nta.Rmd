@@ -273,10 +273,10 @@ my.df.year.grouped$y = log(my.df.year.grouped$count) - log(my.df.year.grouped$Po
 
 ```{r}
 
-FORMULA.YES.INTERACTIONS = as.formula("count ~. -1 -Pop1 + 
+FORMULA.YES.INTERACTIONS = as.formula("count ~. -1 + 
                             NTA2020:LAW_CAT_CD")
 
-FORMULA.NO.INTERACTIONS = as.formula("count ~. -1 -Pop1")
+FORMULA.NO.INTERACTIONS = as.formula("count ~. -1")
 ```
 
 
@@ -366,8 +366,7 @@ Lasso_CV <- function(cv.sets,
   
   for (i in 1:length(cv.sets)) {
     temp_fit <- glmnet(x = cv.sets[[i]]$train$model_matrix,
-                       y = log(cv.sets[[i]]$train$df$count) - # adjust for months and population, take logarithm
-                         log(cv.sets[[i]]$train$df$Pop1 + 1) -
+                       y = log(cv.sets[[i]]$train$df$count) - # adjust for months, take logarithm
                          log(cv.sets[[i]]$train$offset.constant),
                        alpha = 1,
                        lambda = my.lambda.vals)
@@ -378,7 +377,6 @@ Lasso_CV <- function(cv.sets,
     temp_err_matr[, i] <- apply(pred_fit, 2,
                                 function(col) RMSEfun(true_vals = cv.sets[[i]]$test$df$count,
                                                       pred_vals = exp(col +
-                                                                        log(cv.sets[[i]]$test$df$Pop1 + 1)+
                                                                         log(cv.sets[[i]]$test$offset.constant))))
     
     rm(temp_fit)
@@ -512,7 +510,6 @@ Elastic_Cv <- function(cv.sets,
       
     temp_fit <- glmnet(x = cv.sets[[k]]$train$model_matrix,
                        y = log(cv.sets[[k]]$train$df$count) - # adjust for months and population, take logarithm
-                         log(cv.sets[[k]]$train$df$Pop1 + 1) -
                          log(cv.sets[[k]]$train$offset.constant),
                        alpha = my.alpha.vals[j],
                        lambda = my.lambda.vals)
@@ -523,7 +520,6 @@ Elastic_Cv <- function(cv.sets,
     temp.err.array[,j,k] <- apply(pred_fit, 2,
                                 function(col) RMSEfun(true_vals = cv.sets[[k]]$test$df$count,
                                                       pred_vals = exp(col +
-                                                                        log(cv.sets[[k]]$test$df$Pop1 + 1) +
                                                                         log(cv.sets[[k]]$test$offset.constant))))
     
     rm(temp_fit)
@@ -688,7 +684,6 @@ NonConvex_Cv <- function(cv.sets,
       
     temp_fit = picasso(X = cv.sets[[k]]$train$model_matrix,
             Y = log(cv.sets[[k]]$train$df$count) - # adjust for months and population, take logarithm
-                         log(cv.sets[[k]]$train$df$Pop1 + 1) -
                          log(cv.sets[[k]]$train$offset.constant),
             method = my.penalty,
             gamma = my.gamma.vals[j],
@@ -704,7 +699,6 @@ NonConvex_Cv <- function(cv.sets,
     temp.err.array[,j,k] <- apply(pred_fit, 2,
                                 function(col) RMSEfun(true_vals = cv.sets[[k]]$test$df$count,
                                                       pred_vals = exp(col +
-                                                                        log(cv.sets[[k]]$test$df$Pop1 + 1) +
                                                                         log(cv.sets[[k]]$test$offset.constant))))
     
     rm(temp_fit)
@@ -745,14 +739,14 @@ NonConvex_Cv <- function(cv.sets,
 
 ```{r, eval = bool_execute_heavy_chunks}
 models_summary$scad.noint = NonConvex_Cv(cv.sets = month.noint.cv.k4.sets,
-                                             my.lambda.vals = exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE),
+                                             my.lambda.vals = exp(seq(-5, 15, 0.2)) %>% sort(decreasing = TRUE),
                                              my.gamma.vals = seq(2+1e-05, 10, length = 10),
                                          my.penalty = "scad")
 ```
 
 ```{r, warning = FALSE, eval = bool_execute_heavy_chunks}
 models_summary$scad = NonConvex_Cv(cv.sets = month.yesint.cv.k4.sets,
-                                             my.lambda.vals = exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE),
+                                             my.lambda.vals = exp(seq(-1, 10, 0.2)) %>% sort(decreasing = TRUE),
                                              my.gamma.vals = seq(2+1e-05, 10, length = 10),
                                          my.penalty = "scad")
 
@@ -785,13 +779,13 @@ par(mfrow = c(1,1))
 ```
 
 ```{r,  warning=FALSE, eval = bool_execute_heavy_chunks}
-scad.fit.all = ncvreg(X = as.matrix(my.df.year.grouped.matrix),
-                 y = my.df.year.grouped$y,
-                 gamma = models_summary$scad$gmin,
-                 penalty = "scad")
-
-plot(scad.fit.all, log.l = TRUE)
-abline(v = log(models_summary$scad$lmin), col = "blue", lty = 2, lwd = 2)
+# scad.fit.all = ncvreg(X = as.matrix(my.df.year.grouped.matrix),
+#                  y = my.df.year.grouped$y,
+#                  gamma = models_summary$scad$gmin,
+#                  penalty = "scad")
+# 
+# plot(scad.fit.all, log.l = TRUE)
+# abline(v = log(models_summary$scad$lmin), col = "blue", lty = 2, lwd = 2)
 
 ```
 
@@ -800,14 +794,14 @@ abline(v = log(models_summary$scad$lmin), col = "blue", lty = 2, lwd = 2)
 
 ```{r, eval = bool_execute_heavy_chunks}
 models_summary$mcp.noint = NonConvex_Cv(cv.sets = month.noint.cv.k4.sets,
-                                             my.lambda.vals = exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE),
+                                             my.lambda.vals = exp(seq(-5, 5, 0.2)) %>% sort(decreasing = TRUE),
                                              my.gamma.vals = seq(2+1e-05, 10, length = 10),
                                          my.penalty = "mcp")
 ```
 
 ```{r, warning = FALSE, eval = bool_execute_heavy_chunks}
 models_summary$mcp = NonConvex_Cv(cv.sets = month.yesint.cv.k4.sets,
-                                             my.lambda.vals = exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE),
+                                             my.lambda.vals = exp(seq(-5, 5, 0.2)) %>% sort(decreasing = TRUE),
                                              my.gamma.vals = seq(2+1e-05, 10, length = 10),
                                          my.penalty = "mcp")
 ```
@@ -831,7 +825,7 @@ TwoParErrPlot(model_list = models_summary$mcp,
               cv_err_matr_name = "cv.err.matr",
               row_par_min_name = "lmin",
               col_par_min_name = "gmin",
-              my.main = "MCP Cv yes interaction error contour",
+              my.main = "MCP yes interaction Cv error contour",
               my.xlab = "log lambda",
               my.ylab = "gamma")
 
@@ -839,13 +833,13 @@ par(mfrow = c(1,1))
 ```
 
 ```{r, eval = bool_execute_heavy_chunks}
-mcp.fit.all = ncvreg(X = as.matrix(my.df.year.grouped.matrix),
-                 y = my.df.year.grouped$y,
-                 gamma = models_summary$mcp$gmin,
-                 penalty = "mcp")
-
-plot(mcp.fit.all, log.l = TRUE)
-abline(v = log(models_summary$mcp$gmin), col = "blue", lty = 2, lwd = 2)
+# mcp.fit.all = ncvreg(X = as.matrix(my.df.year.grouped.matrix),
+#                  y = my.df.year.grouped$y,
+#                  gamma = models_summary$mcp$gmin,
+#                  penalty = "mcp")
+# 
+# plot(mcp.fit.all, log.l = TRUE)
+# abline(v = log(models_summary$mcp$gmin), col = "blue", lty = 2, lwd = 2)
 
 ```
 
@@ -868,11 +862,7 @@ For all such cases, using the counts as response an offset has to be imposed: in
 #' @param my.offset_var_name (char): take the log and add to train fold offset (assumed is a variable in cv sets)
 Lasso_Offset_CV <- function(cv.sets,
                             my.lambda.vals,
-                            my.response.name = "count",
-                            my.family = poisson(),
-                            my.offset_constant_train = 9, # 9 months
-                            my.offset_constant_test = 3, # 12 - 9 months
-                            my.offset_var_name = "Pop1") {
+                            my.family = poisson()) {
   
   temp_err_matr <- matrix(NA, 
                           nrow = length(my.lambda.vals),
@@ -880,19 +870,19 @@ Lasso_Offset_CV <- function(cv.sets,
   
   for (i in 1:length(cv.sets)) {
     temp_fit <- glmnet(x = cv.sets[[i]]$train$model_matrix,
-                       y = cv.sets[[i]]$train$df[[my.response.name]],
+                       y = cv.sets[[i]]$train$df$count,
                        alpha = 1,
                        lambda = my.lambda.vals,
                        family = my.family,
-                       offset = log(my.offset_constant_train) + log(cv.sets[[i]]$train$df[[my.offset_var_name]] + 1))
+                       offset = log(cv.sets[[i]]$train$offset.constant) )
     
     pred_fit <- predict(temp_fit,
                         newx = cv.sets[[i]]$test$model_matrix,
-                        newoffset = log(my.offset_constant_test) + log(cv.sets[[i]]$test$df[[my.offset_var_name]] + 1),
+                        newoffset = log(cv.sets[[i]]$test$offset.constant),
                         type = "response")
     
     temp_err_matr[, i] <- apply(pred_fit, 2,
-                                function(col) RMSEfun(true_vals = cv.sets[[i]]$test$df[[my.response.name]],
+                                function(col) RMSEfun(true_vals = cv.sets[[i]]$test$df$count,
                                                       pred_vals = col))
     
     rm(temp_fit)
@@ -939,21 +929,13 @@ glmnet.control(mxitnr = 50) # increase maximum no. of IRLS iterations allowed
 ```{r, eval = bool_execute_heavy_chunks, warning=FALSE}
 models_summary$lasso.poi.noint = Lasso_Offset_CV(cv.sets = month.noint.cv.k4.sets,
                                           my.lambda.vals = exp(seq(-15, 3, 0.1)) %>% sort(decreasing = TRUE),
-                                          my.response.name = "count",
-                                          my.family = poisson(),
-                                          my.offset_constant_train = 9, # 9 months
-                                          my.offset_constant_test = 3, # 12 - 9 months
-                                          my.offset_var_name = "Pop1")
+                                          my.family = poisson())
 ```
 
 ```{r, eval = bool_execute_heavy_chunks, warning=FALSE}
 models_summary$lasso.poi = Lasso_Offset_CV(cv.sets = month.yesint.cv.k4.sets,
                                           my.lambda.vals = exp(seq(-15, 3, 0.1)) %>% sort(decreasing = TRUE),
-                                          my.response.name = "count",
-                                          my.family = poisson(),
-                                          my.offset_constant_train = 9, # 9 months
-                                          my.offset_constant_test = 3, # 12 - 9 months
-                                          my.offset_var_name = "Pop1")
+                                          my.family = poisson())
 ```
 
 ```{r}
@@ -995,11 +977,7 @@ save(models_summary, file = "arrests_nta_2010_models_summary.Rdata")
 Elastic_Offset_Cv <- function(cv.sets,
                             my.lambda.vals,
                             my.alpha.vals,
-                            my.response.name = "count",
-                            my.family = poisson(),
-                            my.offset_constant_train = 9, # 9 months
-                            my.offset_constant_test = 3, # 12 - 9 months
-                            my.offset_var_name = "Pop1") {
+                            my.family = poisson()) {
   
   temp.err.array <- array(NA,
                            dim = c(length(my.lambda.vals),
@@ -1013,18 +991,18 @@ Elastic_Offset_Cv <- function(cv.sets,
     for(j in 1:length(my.alpha.vals)){
       
     temp_fit <- glmnet(x = cv.sets[[k]]$train$model_matrix,
-                       y = cv.sets[[k]]$train$df[[my.response.name]],
+                       y = cv.sets[[k]]$train$df$count,
                        alpha = my.alpha.vals[j],
                        lambda = my.lambda.vals,
                        family = my.family,
-                       offset = log(my.offset_constant_train) + log(cv.sets[[k]]$train$df[[my.offset_var_name]]+1))
+                       offset = log(cv.sets[[k]]$train$offset.constant) )
     
     pred_fit <- predict(temp_fit,
                         newx = cv.sets[[k]]$test$model_matrix,
-                        newoffset = log(my.offset_constant_test) + log(cv.sets[[k]]$test$df[[my.offset_var_name]]+1))
+                        newoffset = log(cv.sets[[k]]$test$offset.constant))
     
     temp.err.array[,j,k] <- apply(pred_fit, 2,
-                                function(col) RMSEfun(true_vals = cv.sets[[k]]$test$df[[my.response.name]],
+                                function(col) RMSEfun(true_vals = cv.sets[[k]]$test$df$count,
                                                       pred_vals = col))
     
     rm(temp_fit)
@@ -1067,22 +1045,14 @@ Elastic_Offset_Cv <- function(cv.sets,
 models_summary$elasticnet.poi.noint = Elastic_Offset_Cv(cv.sets = month.noint.cv.k4.sets,
                                                         my.lambda.vals = exp(seq(-10, 2, 0.2)) %>% sort(decreasing = TRUE),
                                                         my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 20),
-                                                        my.response.name = "count",
-                                                        my.family = poisson(),
-                                                        my.offset_constant_train = 9, # 9 months
-                                                        my.offset_constant_test = 3, # 12 - 9 months
-                                                        my.offset_var_name = "Pop1")
+                                                        my.family = poisson())
 ```
 
 ```{r, warning=FALSE, eval = bool_execute_heavy_chunks}
 models_summary$elasticnet.poi = Elastic_Offset_Cv(cv.sets = month.yesint.cv.k4.sets,
                                                         my.lambda.vals = exp(seq(-10, 2, 0.2)) %>% sort(decreasing = TRUE),
                                                         my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 20),
-                                                        my.response.name = "count",
-                                                        my.family = poisson(),
-                                                        my.offset_constant_train = 9, # 9 months
-                                                        my.offset_constant_test = 3, # 12 - 9 months
-                                                        my.offset_var_name = "Pop1")
+                                                        my.family = poisson())
 ```
 
 ```{r}
@@ -1128,11 +1098,7 @@ library(MASS)
 # general purpuose negbin CV function
 LASSO_NegBin_Offset_Cv <- function(cv.sets,
                             my.lambda.vals,
-                            my.theta.vals,
-                            my.response.name = "count",
-                            my.offset_constant_train = 9, # 9 months
-                            my.offset_constant_test = 3, # 12 - 9 months
-                            my.offset_var_name = "Pop1") {
+                            my.theta.vals) {
   
   temp.err.array <- array(NA,
                            dim = c(length(my.lambda.vals),
@@ -1146,18 +1112,18 @@ LASSO_NegBin_Offset_Cv <- function(cv.sets,
     for(j in 1:length(my.theta.vals)){
       
     temp_fit <- glmnet(x = cv.sets[[k]]$train$model_matrix,
-                       y = cv.sets[[k]]$train$df$y,
+                       y = cv.sets[[k]]$train$df$count,
                        alpha = 1,
                        lambda = my.lambda.vals,
                        family = negative.binomial(theta = my.theta.vals[j]),
-                       offset = log(my.offset_constant_train) + log(cv.sets[[k]]$train$df[[my.offset_var_name]]+1))
+                       offset = log(cv.sets[[k]]$train$offset.constant))
     
     pred_fit <- predict(temp_fit,
                         newx = cv.sets[[k]]$test$model_matrix,
-                        newoffset = log(my.offset_constant_test) + log(cv.sets[[k]]$test$df[[my.offset_var_name]]+1))
+                        newoffset = log(cv.sets[[k]]$test$offset.constant))
     
     temp.err.array[,j,k] <- apply(pred_fit, 2,
-                                function(col) RMSEfun(true_vals = cv.sets[[k]]$test$df[[my.response.name]],
+                                function(col) RMSEfun(true_vals = cv.sets[[k]]$test$df$count,
                                                       pred_vals = col))
     
     rm(temp_fit)
@@ -1200,21 +1166,13 @@ LASSO_NegBin_Offset_Cv <- function(cv.sets,
 ```{r, warning=FALSE, eval = bool_execute_heavy_chunks}
 models_summary$lasso.negbin.noint = LASSO_NegBin_Offset_Cv(cv.sets = month.noint.cv.k4.sets,
                                                         my.lambda.vals = exp(seq(-3, 5, 0.2)) %>% sort(decreasing = TRUE),
-                                                        my.theta.vals = seq(1e-5, 3, length = 20),
-                                                        my.response.name = "count",
-                                                        my.offset_constant_train = 9, # 9 months
-                                                        my.offset_constant_test = 3, # 12 - 9 months
-                                                        my.offset_var_name = "Pop1")
+                                                        my.theta.vals = seq(1e-5, 3, length = 20))
 ```
 
 ```{r, warning=FALSE, eval = bool_execute_heavy_chunks}
 models_summary$lasso.negbin = LASSO_NegBin_Offset_Cv(cv.sets = month.yesint.cv.k4.sets,
                                                         my.lambda.vals = exp(seq(-10, 2, 0.2)) %>% sort(decreasing = TRUE),
-                                                        my.theta.vals = seq(1e-5, 20, length = 20),
-                                                        my.response.name = "count",
-                                                        my.offset_constant_train = 9, # 9 months
-                                                        my.offset_constant_test = 3, # 12 - 9 months
-                                                        my.offset_var_name = "Pop1")
+                                                        my.theta.vals = seq(1e-5, 20, length = 20))
 ```
 
 ```{r}
