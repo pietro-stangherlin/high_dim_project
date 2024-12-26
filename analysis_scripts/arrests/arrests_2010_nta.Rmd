@@ -17,6 +17,7 @@ library(Matrix)
 library(glmnet)
 # library(ncvreg)
 library(picasso) # sparse model matrix scad and mcp
+library(gglasso)
 library(viridis)
 ```
 
@@ -27,9 +28,11 @@ library(viridis)
 
 bool_execute_heavy_chunks = TRUE
 
+file_save_name = "arrests_nta_2010_models_summary.Rdata"
+
 # require loading models_summary list
 if(!bool_execute_heavy_chunks){
-  load("arrests_nta_2010_models_summary.Rdata")
+  load(file_save_name)
 } else{
   # store each model useful information:
   # validation error and beta for best lambda
@@ -637,6 +640,88 @@ TwoParErrPlot(model_list = models_summary$elasticnet,
 par(mfrow = c(1,1))
 ```
 
+### Grouped LASSO
+
+
+Pur avendo provato a considerare solo il modello senza interazioni, a causa dell'eccessivo tempo computazionale richiesto non è qui riportato.
+```{r}
+A = colnames(month.noint.cv.k4.sets[[1]]$train$df)
+# Create a named vector to map prefixes to values
+prefix_to_value <- setNames(seq_along(A), A) 
+
+B = colnames(month.noint.cv.k4.sets[[1]]$train$model_matrix)
+
+# Create indexes vector
+var_indexes <- sapply(B, function(item) {
+  prefix <- A[sapply(A, function(prefix) startsWith(item, prefix))]
+  prefix_to_value[prefix]
+})
+
+```
+
+```{r}
+# general purpuose lasso CV function
+GLasso_CV <- function(cv.sets, my.lambda.vals,
+                      group_index) {
+  
+  temp_err_matr <- matrix(NA, 
+                          nrow = length(my.lambda.vals),
+                          ncol = length(cv.sets))
+  
+  for (i in 1:length(cv.sets)) {
+    temp_fit <- gglasso(x = cv.sets[[i]]$train$model_matrix %>% as.matrix,
+                       y = log(cv.sets[[i]]$train$df$count) - # adjust for months, take logarithm
+                         log(cv.sets[[i]]$train$offset.constant),
+                       lambda = my.lambda.vals,
+                       group = group_index)
+    
+    pred_fit <- predict(temp_fit,
+                        newx = scale(cv.sets[[i]]$test$model_matrix) %>% as.matrix)
+    
+    temp_err_matr[, i] <- apply(pred_fit, 2,
+                                function(col) RMSEfun(true_vals = cv.sets[[i]]$test$df$count,
+                                                      pred_vals = exp(col +
+                                                                        log(cv.sets[[i]]$test$offset.constant))))
+    
+    rm(temp_fit)
+    rm(pred_fit)
+    gc()
+  }
+  
+  # Compute error matrix and lambda min and 1se
+  cv_err_matr <- cbind(apply(temp_err_matr, 1, mean),
+                                    apply(temp_err_matr, 1, sd) / sqrt(ncol(temp_err_matr))) %>% as.data.frame()
+  
+  colnames(cv_err_matr) <- c("cv.err", "cv.se")
+  
+  lmin_index <- which.min(cv_err_matr$cv.err)
+  
+  l1se_index <- which.max(cv_err_matr[,"cv.err"] <= (cv_err_matr[lmin_index,"cv.err"] + cv_err_matr[lmin_index,"cv.se"]))
+  
+  list_summary <- list()
+  list_summary[["lambda"]] <- my.lambda.vals
+  
+  list_summary[["lmin"]] <- my.lambda.vals[lmin_index]
+  list_summary[["l1se"]] <- my.lambda.vals[l1se_index]
+  list_summary[["cv.err.matr"]] = cv_err_matr
+  
+  rm(cv_err_matr)
+  rm(temp_err_matr)
+  gc()
+  
+  # add all to list
+  
+  return(list_summary)
+}
+
+```
+
+
+```{r}
+# models_summary$glasso = GLasso_CV(month.noint.cv.k4.sets,
+#                                         my.lambda.vals = exp(seq(-17, -6, 0.1)) %>% sort(decreasing = T),
+#                                   group_index = var_indexes)
+```
 
 
 ### Scad
@@ -845,7 +930,7 @@ par(mfrow = c(1,1))
 
 ```{r}
 # backup to save key model info
-save(models_summary, file = "arrests_nta_2010_models_summary.Rdata")
+save(models_summary, file = file_save_name)
 ```
 
 
@@ -968,7 +1053,7 @@ par(mfrow = c(1,1))
 
 ```{r}
 # backup to save key model info
-save(models_summary, file = "arrests_nta_2010_models_summary.Rdata")
+save(models_summary, file = file_save_name)
 ```
 
 ### Poisson Elasticnet
@@ -1082,7 +1167,7 @@ par(mfrow = c(1,1))
 
 ```{r}
 # backup to save key model info
-save(models_summary, file = "arrests_nta_2010_models_summary.Rdata")
+save(models_summary, file = file_save_name)
 ```
 
 ### Neg bin Lasso
@@ -1203,8 +1288,10 @@ par(mfrow = c(1,1))
 
 ```{r}
 # backup to save key model info
-save(models_summary, file = "arrests_nta_2010_models_summary.Rdata")
+save(models_summary, file = file_save_name)
 ```
+
+### Modelli migliori
 
 
 
