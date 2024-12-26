@@ -31,7 +31,6 @@ source("functions_script.R")
 # IMPORTANT: in order to reproduce the result set bool_execute_heavy_chunks = TRUE
 
 bool_execute_heavy_chunks = FALSE
-
 file_save_name = "arrests_nta_2010_models_summary.Rdata"
 
 # require loading models_summary list
@@ -42,38 +41,79 @@ if(!bool_execute_heavy_chunks){
   # validation error and beta for best lambda
   models_summary = list()
 }
+
+
+# best models fitted on all data
+estimated_best_models = TRUE
+models_fitted_file_name = "models_fitted_nta_2010.Rdata"
+
+# require loading models_summary list
+if(!estimated_best_models){
+  load(models_fitted_file_name)
+} else{
+  # store each model useful information:
+  # validation error and beta for best lambda
+  models_fitted_file_name = list()
+}
 ```
 
 
 ```{r}
 # Preprocessing -------------------------------------
 # read the data
-my.df = read.csv("../../data/final_datasets/arrests_2010_nta.csv", stringsAsFactors = T)
+df_2010 = read.csv("../../data/final_datasets/arrests_2010_nta.csv", stringsAsFactors = T)
+
+# test set
+df_2011 = read.csv("../../data/final_datasets/arrests_2011_nta.csv", stringsAsFactors = T)
 ```
 
 ```{r, message=FALSE, results='hide'}
-my.df$ARREST_DATE = NULL
-my.df$YEAR = NULL
-my.df$Latitude = NULL
-my.df$Longitude = NULL
+df_2010$ARREST_DATE = NULL
+df_2010$YEAR = NULL
+df_2010$Latitude = NULL
+df_2010$Longitude = NULL
 
-my.df$NTA2020 = factor(my.df$NTA2020)
-my.df$MONTH = factor(my.df$MONTH)
+df_2010$NTA2020 = factor(df_2010$NTA2020)
+df_2010$MONTH = factor(df_2010$MONTH)
 
 # add NA category
-my.df$KY_CD = ifelse(is.na(my.df$KY_CD), "MISSING", my.df$KY_CD)
-my.df$KY_CD = factor(my.df$KY_CD)
+df_2010$KY_CD = ifelse(is.na(df_2010$KY_CD), "MISSING", df_2010$KY_CD)
+df_2010$KY_CD = factor(df_2010$KY_CD)
 
-str(my.df)
+str(df_2010)
 
 # check for NA
-apply(my.df, 2, function(col) (sum(is.na(col))))
+apply(df_2010, 2, function(col) (sum(is.na(col))))
 
 # the ratio is high
-nrow(na.omit(my.df)) / nrow(my.df)
+nrow(na.omit(df_2010)) / nrow(df_2010)
 
 # delete missing values
-my.df = na.omit(my.df)
+df_2010 = na.omit(df_2010)
+
+
+df_2011$ARREST_DATE = NULL
+df_2011$YEAR = NULL
+df_2011$Latitude = NULL
+df_2011$Longitude = NULL
+
+df_2011$NTA2020 = factor(df_2011$NTA2020)
+df_2011$MONTH = NULL
+
+# add NA category
+df_2011$KY_CD = ifelse(is.na(df_2011$KY_CD), "MISSING", df_2011$KY_CD)
+df_2011$KY_CD = factor(df_2011$KY_CD)
+
+str(df_2011)
+
+# check for NA
+apply(df_2011, 2, function(col) (sum(is.na(col))))
+
+# the ratio is high
+nrow(na.omit(df_2011)) / nrow(df_2011)
+
+# delete missing values
+df_2011 = na.omit(df_2011)
 ```
 
 
@@ -126,7 +166,7 @@ Ciò pone dei possibili problemi nella stima di modelli che comprendono lo zero 
 
 
 ```{r, results='hide'}
-year_grouped = suppressMessages(my.df %>%
+year_grouped = suppressMessages(df_2010 %>%
   dplyr::select(-"MONTH") %>% 
   group_by_all() %>% 
   summarise(count = n()))
@@ -159,14 +199,14 @@ par(mfrow = c(1,1))
 
 ```{r}
 # to include zeros
-# cols_to_complete = colnames(my.df)
+# cols_to_complete = colnames(df_2010)
 # cols_to_complete = setdiff(cols_to_complete, "MONTH")
 # 
 # # Create a data frame with all combinations of the columns
 # all_combinations <- expand_grid(!!!syms(cols_to_complete))
 # 
 # # Summarize the data and complete with zeros
-# year_grouped_zeros <- my.df %>%
+# year_grouped_zeros <- df_2010 %>%
 #   select(-MONTH) %>%
 #   group_by(across(all_of(cols_to_complete))) %>%
 #   summarise(count = n(), .groups = 'drop') %>%
@@ -191,7 +231,7 @@ var_unique_len = apply(year_grouped,
                        function(col) length(unique(col)))
 ```
 
-Senza considerare KY_CD (esplicative non spaziale di arrest con più modalità) il rapporto è:
+Senza considerare KY_CD (esplicativa non spaziale di arrest con più modalità) il rapporto è:
 ```{r, include = TRUE}
 nrow(year_grouped) / (var_unique_len["NTA2020"] *
   sum(var_unique_len[c("LAW_CAT_CD", "AGE_GROUP", "PERP_SEX", "PERP_RACE")]))
@@ -205,9 +245,12 @@ nrow(year_grouped) / (var_unique_len["NTA2020"] *
 ```
 
 
-Poichè dopo alcune prove le procedure si sono rivelate troppo onerose includendo KY_CD si è deciso di rimuoverla confidando che l'informazione fornita da LAW_CAT_CD sia comunuque informativa.
+
 ```{r}
-my.df$KY_CD = NULL
+
+# Poichè dopo alcune prove le procedure si sono rivelate troppo onerose includendo KY_CD si è deciso di # rimuoverla confidando che l'informazione fornita da LAW_CAT_CD sia comunuque informativa.
+# df_2010$KY_CD = NULL
+# df_2011$KY_CD = NULL
 ```
 
 ## Modelli
@@ -245,39 +288,73 @@ month_sets_ind = list(k4 = matrix(c(1, 5, 9,
 
 ### Matrice del modello
 
-Le matrici del modello considerate sono quella senza interazioni e quella con interazioni tra NTA e LAW_CAT_CD.
+Le matrici del modello considerate sono quella senza interazioni e quella con interazioni tra NTA e le esplicative in arrests.
 ```{r, include=TRUE}
 FORMULA.NO.INTERACTIONS = as.formula("count ~. -1")
 
-FORMULA.YES.INTERACTIONS = as.formula("count ~. -1 + 
-                            NTA2020:LAW_CAT_CD")
+FORMULA.YES.INTERACTIONS = as.formula("count ~. -1 +
+                            NTA2020:KY_CD +  
+                            NTA2020:LAW_CAT_CD + 
+                            NTA2020:AGE_GROUP + 
+                            NTA2020:PERP_SEX + 
+                            NTA2020:PERP_RACE")
 ```
 
+```{r, warning=FALSE, results='hide'}
 
-```{r, warning=FALSE}
-
-my.df.year.grouped = suppressMessages(my.df %>%
+df_2010_grouped = suppressMessages(df_2010 %>%
   dplyr::select(-MONTH) %>% 
   group_by_all() %>% 
   summarise(count = n()))
 
+df_2011_grouped = suppressMessages(df_2011 %>%
+  group_by_all() %>% 
+  summarise(count = n()))
+
+df_2010_grouped.matrix = sparse.model.matrix(FORMULA.YES.INTERACTIONS,
+                                                df_2010_grouped)
+
+df_2011_grouped.matrix = sparse.model.matrix(FORMULA.YES.INTERACTIONS,
+                                                df_2011_grouped)
+gc()
+```
+
+
+Poichè la matrice del modello dell'insieme di verifica e quella dell'insieme di stima non condividono tutte le colonne si sceglie di ridurre le colonne di entrambe con le colonne in comune.
+```{r}
+
+
+# check dimensions
+dim(df_2010_grouped.matrix)
+dim(df_2011_grouped.matrix)
+
+col_names_2010 = colnames(df_2010_grouped.matrix)
+col_names_2011 = colnames(df_2011_grouped.matrix)
+
+common_col_names = intersect(col_names_2010, col_names_2011)
+
+# in order to use 2011 as a test set we need to uniform the 2011 columns to 2010 colums:
+# some bias is introduced here, let's hope it's about small counts
+df_2010_grouped.matrix = df_2010_grouped.matrix[,common_col_names]
+df_2011_grouped.matrix = df_2011_grouped.matrix[,common_col_names]
 ```
 
 ```{r}
-my.df.year.grouped.matrix = sparse.model.matrix(FORMULA.YES.INTERACTIONS,
-                                                my.df.year.grouped)
-```
+# make cv folds
 
-```{r}
 # NO interaction
-month.noint.cv.k4.sets = suppressMessages(MakeMonthCvSets(my_df = my.df,
+month.noint.cv.k4.sets = suppressMessages(MakeMonthCvSets(my_df = df_2010,
                        month_sets_ind = month_sets_ind$k4,
                        formula = FORMULA.NO.INTERACTIONS))
 # Yes interaction
-month.yesint.cv.k4.sets = suppressMessages(MakeMonthCvSets(my_df = my.df,
+month.yesint.cv.k4.sets = suppressMessages(MakeMonthCvSets(my_df = df_2010,
                        month_sets_ind = month_sets_ind$k4,
                        formula = FORMULA.YES.INTERACTIONS))
 ```
+
+
+
+
 
 ### Esplicative quantitative
 
@@ -327,12 +404,34 @@ PlotOneDim(x = log(models_summary$lasso$lambda),
 par(mfrow = c(1,1))
 ```
 
+```{r, results='hide', ,eval = bool_execute_heavy_chunks}
+temp.fit = glmnet(x = df_2010_grouped.matrix,
+                  y = log(df_2010_grouped$count) -log(12),
+                  lambda = models_summary$lasso$lmin)
+
+models_summary$lasso$beta = temp.fit$beta
+models_summary$lasso$test_error = RMSEfun(df_2011_grouped$count, 
+                                          exp(predict(temp.fit, newx = df_2011_grouped.matrix) + log(12)))
+
+temp.fit = glmnet(x = df_2010_grouped.matrix,
+                  y = log(df_2010_grouped$count) -log(12),
+                  lambda = models_summary$lasso$l1se)
+
+models_summary$lasso$beta1se = temp.fit$beta
+models_summary$lasso$test_error1se = RMSEfun(df_2011_grouped$count, 
+                                          exp(predict(temp.fit, newx = df_2011_grouped.matrix) + log(12)))
+
+
+```
+
+
 ### Elasticnet
 
 ```{r,eval = bool_execute_heavy_chunks}
 models_summary$elasticnet.noint = Elastic_Cv(cv.sets = month.noint.cv.k4.sets,
                                              my.lambda.vals = exp(seq(-20, -8, 0.1)) %>% sort(decreasing = TRUE),
                                              my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 20))
+
 ```
 
 ```{r, eval = bool_execute_heavy_chunks}
@@ -366,6 +465,18 @@ TwoParErrPlot(model_list = models_summary$elasticnet,
 
 par(mfrow = c(1,1))
 ```
+
+```{r, eval = bool_execute_heavy_chunks}
+temp.fit = glmnet(x = df_2010_grouped.matrix,
+                  y = log(df_2010_grouped$count) -log(12),
+                  alpha = models_summary$elasticnet$amin,
+                  lambda = models_summary$elasticnet$lmin)
+
+models_summary$elasticnet$beta = temp.fit$beta
+models_summary$elasticnet$test_error = RMSEfun(df_2011_grouped$count, 
+                                          exp(predict(temp.fit, newx = df_2011_grouped.matrix) + log(12)))
+```
+
 
 ### Grouped LASSO
 
@@ -437,15 +548,19 @@ par(mfrow = c(1,1))
 ```
 
 ```{r,  warning=FALSE, eval = bool_execute_heavy_chunks}
-# scad.fit.all = ncvreg(X = as.matrix(my.df.year.grouped.matrix),
-#                  y = my.df.year.grouped$y,
-#                  gamma = models_summary$scad$gmin,
-#                  penalty = "scad")
-# 
-# plot(scad.fit.all, log.l = TRUE)
-# abline(v = log(models_summary$scad$lmin), col = "blue", lty = 2, lwd = 2)
+temp.fit = ncvreg(x = as.matrix(df_2010_grouped.matrix),
+                 y = log(df_2010_grouped$count) -log(12),
+                 gamma = models_summary$scad$gmin,
+                 penalty = "SCAD")
 
+plot(temp.fit, log.l = TRUE)
+abline(v = log(models_summary$scad$lmin), col = "blue", lty = 2, lwd = 2)
+
+models_summary$scad$beta = temp.fit$beta
+models_summary$scad$test_error = RMSEfun(df_2011_grouped$count, 
+                                          exp(predict(temp.fit, X = df_2011_grouped.matrix) + log(12)))
 ```
+
 
 
 ### MCP
@@ -491,13 +606,19 @@ par(mfrow = c(1,1))
 ```
 
 ```{r, eval = bool_execute_heavy_chunks}
-# mcp.fit.all = ncvreg(X = as.matrix(my.df.year.grouped.matrix),
-#                  y = my.df.year.grouped$y,
-#                  gamma = models_summary$mcp$gmin,
-#                  penalty = "mcp")
-# 
-# plot(mcp.fit.all, log.l = TRUE)
-# abline(v = log(models_summary$mcp$gmin), col = "blue", lty = 2, lwd = 2)
+temp.fit = ncvreg(x = as.matrix(df_2010_grouped.matrix),
+                 y = log(df_2010_grouped$count) -log(12),
+                 gamma = models_summary$mcp$gmin,
+                 penalty = "MCP")
+
+plot(temp.fit, log.l = TRUE)
+abline(v = log(models_summary$mcp$lmin), col = "blue", lty = 2, lwd = 2)
+
+models_summary$mcp$beta = temp.fit$beta
+models_summary$mcp$test_error = RMSEfun(df_2011_grouped$count, 
+                                          exp(predict(temp.fit, X = df_2011_grouped.matrix) + log(12)))
+
+
 
 ```
 

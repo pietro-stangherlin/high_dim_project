@@ -4,7 +4,7 @@
 library(tidyverse)
 library(Matrix)
 library(glmnet)
-# library(ncvreg)
+library(ncvreg)
 library(picasso) # sparse model matrix scad and mcp
 library(gglasso)
 library(viridis)
