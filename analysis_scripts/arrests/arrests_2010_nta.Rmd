@@ -1,6 +1,7 @@
 ---
 title: "Arrests 2010 NTA: Analisi"
 output: pdf_document
+eometry: margin=1cm
 ---
 
 ```{r setup, include = FALSE}
@@ -8,9 +9,18 @@ knitr::opts_chunk$set(echo = FALSE)
 knitr::opts_chunk$set(fig.align = 'center')
 ```
 
-```{r, message=FALSE, warning=FALSE}
+```{r, message=FALSE, warning=FALSE, results='hide'}
 rm(list = ls())
-gc()
+gc(verbose = FALSE)
+library(gridExtra)
+
+# plotting parameters 1d plot
+OUT.WIDTH.1d = "95%"
+OUT.HEIGHT.1d = "65%"
+
+# plotting parameters 2d plots
+OUT.WIDTH = "45%"
+OUT.HEIGHT = "75%"
 
 source("functions_script.R")
 ```
@@ -20,7 +30,7 @@ source("functions_script.R")
 # assuming the models are been loaded from a RData file before.
 # IMPORTANT: in order to reproduce the result set bool_execute_heavy_chunks = TRUE
 
-bool_execute_heavy_chunks = TRUE
+bool_execute_heavy_chunks = FALSE
 
 file_save_name = "arrests_nta_2010_models_summary.Rdata"
 
@@ -41,8 +51,7 @@ if(!bool_execute_heavy_chunks){
 my.df = read.csv("../../data/final_datasets/arrests_2010_nta.csv", stringsAsFactors = T)
 ```
 
-Remove date and NTA variables, convert to factor location, month and KY_CD.
-```{r, message=FALSE}
+```{r, message=FALSE, results='hide'}
 my.df$ARREST_DATE = NULL
 my.df$YEAR = NULL
 my.df$Latitude = NULL
@@ -116,7 +125,7 @@ Poichè i conteggi sono costruiti raggruppando le osservazioni con le stesse com
 Ciò pone dei possibili problemi nella stima di modelli che comprendono lo zero nel supporto (ad esempio il modello di Poisson). Si è comunque provato ad adattare modelli (sia a risposta continua che discreta) su questa tipologia di dati, una delle possibili soluzioni al di fuori di impiegare modelli diversi è la metodologia "zero padding" in cui per ogni combinazione di variabili per cui non si verificano casi si aggiunge un'osservazione con conteggio nullo: la criticità qui è computazionale dovuta all'incremento notevole delle osservazioni.
 
 
-```{r}
+```{r, results='hide'}
 year_grouped = suppressMessages(my.df %>%
   dplyr::select(-"MONTH") %>% 
   group_by_all() %>% 
@@ -124,11 +133,10 @@ year_grouped = suppressMessages(my.df %>%
 
 ```
 
-Still a huge number of observations compared to the number of variables, but what if we add interactions?
 
 
 A sinistra i conteggi di arresti raggruppati per valori di covariate e a destra il logaritmo della medesima quantità
-```{r}
+```{r, fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d}
 par(mfrow = c(1,2))
 
 year_grouped$count %>%
@@ -197,7 +205,7 @@ nrow(year_grouped) / (var_unique_len["NTA2020"] *
 ```
 
 
-Poichè dopo alcune prove le procedure si sono rivelate troppo onerose includendo KY_CD si è deciso di rimuoverla sperando che l'informazione fornita da LAW_CAT_CD sia sufficiente.
+Poichè dopo alcune prove le procedure si sono rivelate troppo onerose includendo KY_CD si è deciso di rimuoverla confidando che l'informazione fornita da LAW_CAT_CD sia comunuque informativa.
 ```{r}
 my.df$KY_CD = NULL
 ```
@@ -213,6 +221,7 @@ La procedura per la costruzione degli insiemi è la seguente:
 - Ogni insieme di convalida è composto da osservazioni raggruppate di 12 / k (3) mesi e i mesi rimanenti (9) vengono utilizzati per adattare il modello.
 - Per cercare di compensare e mediare le fluttuazioni stagionali, i mesi di validazione sono scelti il più distanziati possibile. Ad esempio, nel caso di k = 4, il primo insieme di validazione è (gennaio, maggio, settembre), il secondo set è (febbraio, giugno, ottobre), il terzo è (marzo, luglio, novembre) e il quarto è (aprile, agosto, dicembre).
 - Per rendere ogni risposta comparabile avendo utilizzato un numero diverso di mesi, una nuova risposta è definita come il rapporto degli arresti diviso per il numero di mesi utilizzati nel raggruppamento (ovvero l'esponziale dell 'offset nel modello di Poisson).
+
 
 ```{r}
 # months indexes sets
@@ -234,24 +243,15 @@ month_sets_ind = list(k4 = matrix(c(1, 5, 9,
                                   nrow = 6))
 ```
 
-### Modelli Continui
-
-when using a linear model (assuming gaussian errors) we consider the response as: 
-$y = \log(\text{count} / \text{population})$ where each count is the events count obtained by grouping by all other covariates and each population is specific to each NTA.
-
-
 ### Matrice del modello
 
-
-```{r}
+Le matrici del modello considerate sono quella senza interazioni e quella con interazioni tra NTA e LAW_CAT_CD.
+```{r, include=TRUE}
+FORMULA.NO.INTERACTIONS = as.formula("count ~. -1")
 
 FORMULA.YES.INTERACTIONS = as.formula("count ~. -1 + 
                             NTA2020:LAW_CAT_CD")
-
-FORMULA.NO.INTERACTIONS = as.formula("count ~. -1")
 ```
-
-
 
 
 ```{r, warning=FALSE}
@@ -279,11 +279,13 @@ month.yesint.cv.k4.sets = suppressMessages(MakeMonthCvSets(my_df = my.df,
                        formula = FORMULA.YES.INTERACTIONS))
 ```
 
+### Esplicative quantitative
 
+Benchè le eslplicative quantitative permettano la specificazione di diverse forme funzionali qui, per ragioni computazionali ci si limita ad assumere (forzatamente) una relazione monotona lineare con la risposta.
 
-### Note on quantitative covariates
+### Modelli per risposta continua
 
-The simplest assumption is to assume a linear (monotone) trend of the response as a function of quantitative covariates.
+Nell'impiego dei modelli con risposta continua (con errori gaussiani i.i.d) si è scelto di stimare il modello su una trasformazione logaritmica della risposta: "y = count / n_month_train" e calcolare l'errore di previsioni sulla trasformazione "count = exp(y) * n_month_test" rispetto al numero di conteggi osservati, in questo modo la previsione è sempre positiva.
 
 ### LASSO
 
@@ -297,7 +299,7 @@ models_summary$lasso <- Lasso_CV(month.yesint.cv.k4.sets,
                                         my.lambda.vals = exp(seq(-13, -6, 0.1)) %>% sort(decreasing = T))
 ```
 
-```{r}
+```{r, fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d}
 par(mfrow = c(1,2))
 
 PlotOneDim(x = log(models_summary$lasso.noint$lambda),
@@ -327,7 +329,6 @@ par(mfrow = c(1,1))
 
 ### Elasticnet
 
-
 ```{r,eval = bool_execute_heavy_chunks}
 models_summary$elasticnet.noint = Elastic_Cv(cv.sets = month.noint.cv.k4.sets,
                                              my.lambda.vals = exp(seq(-20, -8, 0.1)) %>% sort(decreasing = TRUE),
@@ -341,7 +342,7 @@ models_summary$elasticnet = Elastic_Cv(cv.sets = month.yesint.cv.k4.sets,
                                              my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 20))
 ```
 
-```{r}
+```{r, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT}
 par(mfrow = c(1,2))
 TwoParErrPlot(model_list = models_summary$elasticnet.noint,
               row_par_name = "lambda",
@@ -367,7 +368,6 @@ par(mfrow = c(1,1))
 ```
 
 ### Grouped LASSO
-
 
 Pur avendo provato a considerare solo il modello senza interazioni, a causa dell'eccessivo tempo computazionale richiesto non è qui riportato.
 ```{r}
@@ -410,7 +410,7 @@ models_summary$scad = NonConvex_Cv(cv.sets = month.yesint.cv.k4.sets,
 
 ```
 
-```{r}
+```{r, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT}
 par(mfrow = c(1,2))
 TwoParErrPlot(model_list = models_summary$scad.noint,
               row_par_name = "lambda",
@@ -465,7 +465,7 @@ models_summary$mcp = NonConvex_Cv(cv.sets = month.yesint.cv.k4.sets,
 ```
 
 
-```{r}
+```{r, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT}
 par(mfrow = c(1,2))
 TwoParErrPlot(model_list = models_summary$mcp.noint,
               row_par_name = "lambda",
@@ -507,10 +507,7 @@ save(models_summary, file = file_save_name)
 ```
 
 
-### Discrete response models
-
-In reality the counts are discrete so it seems reasonable to also try discrete response models such as Poisson, Negative Binomial and zero inflated Poisson.
-For all such cases, using the counts as response an offset has to be imposed: in analogy from what has been done assuming the continuous response the offset will be the product of the NTA Population by the number of months considered (in log scale using the canonincal log link for a Poisson GLM)
+### Modelli per dati di conteggio
 
 ### Poisson LASSO
 
@@ -531,7 +528,7 @@ models_summary$lasso.poi = Lasso_Offset_CV(cv.sets = month.yesint.cv.k4.sets,
                                           my.family = poisson())
 ```
 
-```{r}
+```{r, fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d}
 par(mfrow = c(1,2))
 PlotOneDim(x = log(models_summary$lasso.poi.noint$lambda),
            y = models_summary$lasso.poi.noint$cv.err.matr[,"cv.err"],
@@ -580,7 +577,7 @@ models_summary$elasticnet.poi = Elastic_Offset_Cv(cv.sets = month.yesint.cv.k4.s
                                                         my.family = poisson())
 ```
 
-```{r}
+```{r, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT}
 par(mfrow = c(1,2))
 TwoParErrPlot(model_list = models_summary$elasticnet.poi.noint,
               row_par_name = "lambda",
@@ -628,7 +625,7 @@ models_summary$lasso.negbin = LASSO_NegBin_Offset_Cv(cv.sets = month.yesint.cv.k
                                                         my.theta.vals = seq(1e-5, 20, length = 20))
 ```
 
-```{r, eval = bool_execute_heavy_chunks}
+```{r, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT}
 par(mfrow = c(1,2))
 
 TwoParErrPlot(model_list = models_summary$lasso.negbin.noint,
@@ -661,6 +658,14 @@ save(models_summary, file = file_save_name)
 
 ### Modelli migliori
 
+```{r}
+extracted_best_pars  = list()
+
+for (model in names(models_summary)){
+  extracted_best_pars[[model]] = ExtractBestPars(models_summary[[model]])
+}
+
+```
 
 
 

@@ -632,5 +632,18 @@ LASSO_NegBin_Offset_Cv <- function(cv.sets,
   return(list_summary)
 }
 
+# Extract summary ---------------------------------------
+
+# Function to extract the minimum value from cv.err.matr and other elements if they exist
+ExtractBestPars <- function(sublist) {
+  list(
+    lmin = if ("lmin" %in% names(sublist)) sublist[["lmin"]] else NA,
+    l1se = if ("l1se" %in% names(sublist)) sublist[["l1se"]] else NA,
+    gmin = if ("gmin" %in% names(sublist)) sublist[["gmin"]] else NA,
+    tmin = if ("tmin" %in% names(sublist)) sublist[["tmin"]] else NA
+  )
+}
+
+
 
 
