@@ -959,11 +959,11 @@ Lasso_Offset_CV <- function(cv.sets,
                        alpha = 1,
                        lambda = my.lambda.vals,
                        family = my.family,
-                       offset = log(cv.sets[[i]]$train$offset.constant) )
+                       offset = rep(log(cv.sets[[i]]$train$offset.constant), nrow(cv.sets[[i]]$train$df)) )
     
     pred_fit <- predict(temp_fit,
                         newx = cv.sets[[i]]$test$model_matrix,
-                        newoffset = log(cv.sets[[i]]$test$offset.constant),
+                        newoffset = rep(log(cv.sets[[i]]$test$offset.constant), nrow(cv.sets[[i]]$test$df)),
                         type = "response")
     
     temp_err_matr[, i] <- apply(pred_fit, 2,
@@ -1080,11 +1080,11 @@ Elastic_Offset_Cv <- function(cv.sets,
                        alpha = my.alpha.vals[j],
                        lambda = my.lambda.vals,
                        family = my.family,
-                       offset = log(cv.sets[[k]]$train$offset.constant) )
+                       offset = rep(log(cv.sets[[k]]$train$offset.constant), nrow(cv.sets[[k]]$train$df)))
     
     pred_fit <- predict(temp_fit,
                         newx = cv.sets[[k]]$test$model_matrix,
-                        newoffset = log(cv.sets[[k]]$test$offset.constant))
+                        newoffset = rep(log(cv.sets[[k]]$test$offset.constant), nrow(cv.sets[[k]]$test$df)))
     
     temp.err.array[,j,k] <- apply(pred_fit, 2,
                                 function(col) RMSEfun(true_vals = cv.sets[[k]]$test$df$count,
@@ -1201,11 +1201,11 @@ LASSO_NegBin_Offset_Cv <- function(cv.sets,
                        alpha = 1,
                        lambda = my.lambda.vals,
                        family = negative.binomial(theta = my.theta.vals[j]),
-                       offset = log(cv.sets[[k]]$train$offset.constant))
+                       offset = rep(log(cv.sets[[k]]$train$offset.constant), nrow(cv.sets[[k]]$train$df)))
     
     pred_fit <- predict(temp_fit,
                         newx = cv.sets[[k]]$test$model_matrix,
-                        newoffset = log(cv.sets[[k]]$test$offset.constant))
+                        newoffset = rep(log(cv.sets[[k]]$test$offset.constant), nrow(cv.sets[[k]]$test$df)))
     
     temp.err.array[,j,k] <- apply(pred_fit, 2,
                                 function(col) RMSEfun(true_vals = cv.sets[[k]]$test$df$count,
