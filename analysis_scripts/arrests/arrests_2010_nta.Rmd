@@ -44,17 +44,17 @@ if(!bool_execute_heavy_chunks){
 
 
 # best models fitted on all data
-estimated_best_models = TRUE
-models_fitted_file_name = "models_fitted_nta_2010.Rdata"
-
-# require loading models_summary list
-if(!estimated_best_models){
-  load(models_fitted_file_name)
-} else{
-  # store each model useful information:
-  # validation error and beta for best lambda
-  models_fitted_file_name = list()
-}
+# estimated_best_models = TRUE
+# models_fitted_file_name = "models_fitted_nta_2010.Rdata"
+# 
+# # require loading models_summary list
+# if(!estimated_best_models){
+#   load(models_fitted_file_name)
+# } else{
+#   # store each model useful information:
+#   # validation error and beta for best lambda
+#   models_fitted_file_name = list()
+# }
 ```
 
 
