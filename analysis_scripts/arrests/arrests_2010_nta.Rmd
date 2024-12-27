@@ -369,11 +369,6 @@ models_summary$lasso <- Lasso_CV(month.yesint.cv.k4.sets,
                                         my.lambda.vals = exp(seq(-13, -6, 0.1)) %>% sort(decreasing = T))
 ```
 
-```{r, fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d}
-
-
-par(mfrow = c(1,1))
-```
 
 ```{r, results='hide', ,eval = bool_execute_heavy_chunks}
 temp.fit = glmnet(x = df_2010_grouped.matrix,
@@ -461,11 +456,7 @@ models_summary$scad = NonConvex_Cv(cv.sets = month.yesint.cv.k4.sets,
 
 ```
 
-```{r, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT}
 
-
-
-```
 
 ```{r,  warning=FALSE, eval = bool_execute_heavy_chunks}
 # temp.fit = ncvreg(x = as.matrix(df_2010_grouped.matrix),
@@ -489,13 +480,6 @@ models_summary$mcp = NonConvex_Cv(cv.sets = month.yesint.cv.k4.sets,
                                          my.penalty = "mcp")
 ```
 
-
-```{r, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT}
-
-
-
-par(mfrow = c(1,1))
-```
 
 ```{r, eval = bool_execute_heavy_chunks}
 # temp.fit = ncvreg(x = as.matrix(df_2010_grouped.matrix),
