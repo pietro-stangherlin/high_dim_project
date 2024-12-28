@@ -350,7 +350,7 @@ df_2011_grouped.matrix = df_2011_grouped.matrix[,common_col_names]
 # month.noint.cv.k4.sets = suppressMessages(MakeMonthCvSets(my_df = df_2010,
 #                        month_sets_ind = month_sets_ind$k4,
 #                        formula = FORMULA.NO.INTERACTIONS))
-# Yes interaction
+# 
 month.yesint.cv.k4.sets = suppressMessages(MakeMonthCvSets(my_df = df_2010,
                        month_sets_ind = month_sets_ind$k4,
                        formula = FORMULA.YES.INTERACTIONS))
@@ -365,10 +365,15 @@ Benchè le eslplicative quantitative permettano la specificazione di diverse for
 
 Nell'impiego dei modelli con risposta continua (con errori gaussiani i.i.d) si è scelto di stimare il modello su una trasformazione logaritmica della risposta: "y = count / n_month_train" e calcolare l'errore di previsioni sulla trasformazione "count = exp(y) * n_month_test" rispetto al numero di conteggi osservati, in questo modo la previsione è sempre positiva.
 
+### Modelli e procedure considerati
+
+I modelli considerati sono modelli normali con penalizzazioni LASSO, Elasticnet, SCAD ed MCP e modelli Poisson con penalizzazioni LASSO ed Elasticnet. Per per tutti i modelli si seleziona il parametro (eventualmente vettoriale) di regolazione che minimizza l'errore di convalida. Per i metodi per cui il parametro di regolarizzazione ha dimensione 2 si definisce una griglia di valori (di cui si riporta il grafico delle curve di livello dell'errore).
+Per i metodi SCAD e MCP, poichè "ncvreg" presenta dei problemi computazionali dovute alle dimensioni del dataset è impiegata la libreria "picasso" che però non fornisce indicazioni rispetto alle regioni non convesse.
+
 
 ```{r, eval = bool_execute_heavy_chunks}
 models_summary$lasso <- Lasso_CV(month.yesint.cv.k4.sets,
-                                        my.lambda.vals = exp(seq(-13, -6, 0.1)) %>% sort(decreasing = T))
+                                        my.lambda.vals = exp(seq(-20, -6, 0.1)) %>% sort(decreasing = T))
 ```
 
 
@@ -376,24 +381,10 @@ models_summary$lasso <- Lasso_CV(month.yesint.cv.k4.sets,
 ```{r, eval = bool_execute_heavy_chunks}
 
 models_summary$elasticnet = Elastic_Cv(cv.sets = month.yesint.cv.k4.sets,
-                                             my.lambda.vals = exp(seq(-20, -8, 0.1)) %>% sort(decreasing = TRUE),
+                                             my.lambda.vals = exp(seq(-20, -6, 0.1)) %>% sort(decreasing = TRUE),
                                              my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 20))
 ```
 
-```{r, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT}
-
-TwoParErrPlot(model_list = models_summary$elasticnet,
-              row_par_name = "lambda",
-              col_par_name = "alpha",
-              cv_err_matr_name = "cv.err.matr",
-              row_par_min_name = "lmin",
-              col_par_min_name = "amin",
-              my.main = "Elasticnet yes interaction Cv error contour",
-              my.xlab = "log lambda",
-              my.ylab = "alpha")
-
-par(mfrow = c(1,1))
-```
 
 ```{r, eval = bool_execute_heavy_chunks}
 temp.fit = glmnet(x = df_2010_grouped.matrix,
@@ -503,33 +494,6 @@ models_summary$lasso.poi = Lasso_Offset_CV(cv.sets = month.yesint.cv.k4.sets,
                                           my.family = poisson())
 ```
 
-```{r, fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d}
-par(mfrow = c(1,2))
-
-PlotOneDim(x = log(models_summary$lasso$lambda),
-           y = models_summary$lasso$cv.err.matr$cv.err,
-           se = models_summary$lasso$cv.err.matr$cv.se,
-           x.min = log(models_summary$lasso$lmin),
-           x.1se = log(models_summary$lasso$l1se),
-           xlab = "log lambda",
-           ylab = "CV error",
-           main = "LASSO yes interaction CV error",
-          min.leg = "lambda min",
-           onese.leg = "lambda 1se")
-
-PlotOneDim(x = log(models_summary$lasso.poi$lambda),
-           y = models_summary$lasso.poi$cv.err.matr$cv.err,
-           se = models_summary$lasso.poi$cv.err.matr$cv.se,
-           x.min = log(models_summary$lasso.poi$lmin),
-           x.1se = log(models_summary$lasso.poi$l1se),
-           xlab = "log lambda",
-           ylab = "CV error",
-           main = "LASSO Poisson yes interaction CV error",
-          min.leg = "lambda min",
-           onese.leg = "lambda 1se")
-
-par(mfrow = c(1,1))
-```
 
 
 ```{r}
@@ -552,7 +516,43 @@ models_summary$elasticnet.poi = Elastic_Offset_Cv(cv.sets = month.yesint.cv.k4.s
                                                         my.family = poisson())
 ```
 
+Sia per il modello normale che per quello Poisson il $\lambda$ minimo è molto vicino a zero (poichè la soluzione è sul bordo si dovrebbe provare a diminuire ulteriormente $\lambda$, ma già così i coefficienti sono quasi uguali alle stime non penalizzate).
+```{r, fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d}
+par(mfrow = c(1,2))
+
+PlotOneDim(x = log(models_summary$lasso$lambda),
+           y = models_summary$lasso$cv.err.matr$cv.err,
+           se = models_summary$lasso$cv.err.matr$cv.se,
+           x.min = log(models_summary$lasso$lmin),
+           x.1se = log(models_summary$lasso$l1se),
+           xlab = "log lambda",
+           ylab = "CV error",
+           main = "LASSO  CV error",
+          min.leg = "lambda min",
+           onese.leg = "lambda 1se")
+
+PlotOneDim(x = log(models_summary$lasso.poi$lambda),
+           y = models_summary$lasso.poi$cv.err.matr$cv.err,
+           se = models_summary$lasso.poi$cv.err.matr$cv.se,
+           x.min = log(models_summary$lasso.poi$lmin),
+           x.1se = log(models_summary$lasso.poi$l1se),
+           xlab = "log lambda",
+           ylab = "CV error",
+           main = "LASSO Poisson  CV error",
+          min.leg = "lambda min",
+           onese.leg = "lambda 1se")
+```
+
+
+Elasticnet individua in entrambi i casi un $\alpha$ prossimo a zero (ridge), nel modello normale presenta una soluzione molto vicina alle stime non penalizzate ($\lambda$ è prossimo a zero), mentre nel modello Poisson il $\lambda$ selezionato è 
+
+```{r}
+models_summary$elasticnet.poi$lmin
+```
+
+
 ```{r, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT}
+par(mfrow = c(1,2))
 
 TwoParErrPlot(model_list = models_summary$elasticnet,
               row_par_name = "lambda",
@@ -560,9 +560,28 @@ TwoParErrPlot(model_list = models_summary$elasticnet,
               cv_err_matr_name = "cv.err.matr",
               row_par_min_name = "lmin",
               col_par_min_name = "amin",
-              my.main = "Elasticnet yes interaction Cv error contour",
+              my.main = "Elasticnet  Cv error contour",
               my.xlab = "log lambda",
               my.ylab = "alpha")
+
+TwoParErrPlot(model_list = models_summary$elasticnet.poi,
+              row_par_name = "lambda",
+              col_par_name = "alpha",
+              cv_err_matr_name = "cv.err.matr",
+              row_par_min_name = "lmin",
+              col_par_min_name = "amin",
+              my.main = "Elasticnet Poisson  Cv error contour",
+              my.xlab = "log lambda",
+              my.ylab = "alpha")
+
+par(mfrow = c(1,1))
+```
+
+
+
+```{r, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT}
+
+par(mfrow = c(1,2))
 
 TwoParErrPlot(model_list = models_summary$mcp,
               row_par_name = "lambda",
@@ -570,7 +589,7 @@ TwoParErrPlot(model_list = models_summary$mcp,
               cv_err_matr_name = "cv.err.matr",
               row_par_min_name = "lmin",
               col_par_min_name = "gmin",
-              my.main = "MCP yes interaction Cv error contour",
+              my.main = "MCP  Cv error contour",
               my.xlab = "log lambda",
               my.ylab = "gamma")
 
@@ -580,22 +599,16 @@ TwoParErrPlot(model_list = models_summary$scad,
               cv_err_matr_name = "cv.err.matr",
               row_par_min_name = "lmin",
               col_par_min_name = "gmin",
-              my.main = "SCAD yes interaction Cv error contour",
+              my.main = "SCAD  Cv error contour",
               my.xlab = "log lambda",
               my.ylab = "gamma")
 
-TwoParErrPlot(model_list = models_summary$elasticnet.poi,
-              row_par_name = "lambda",
-              col_par_name = "alpha",
-              cv_err_matr_name = "cv.err.matr",
-              row_par_min_name = "lmin",
-              col_par_min_name = "amin",
-              my.main = "Elasticnet Poisson yes interaction Cv error contour",
-              my.xlab = "log lambda",
-              my.ylab = "alpha")
-
 par(mfrow = c(1,1))
 ```
+
+
+
+
 
 ```{r}
 # backup to save key model info
@@ -641,7 +654,7 @@ par(mfrow = c(1,1))
 #               cv_err_matr_name = "cv.err.matr",
 #               row_par_min_name = "lmin",
 #               col_par_min_name = "tmin",
-#               my.main = "LASSO Negative Binomial yes interaction Cv error contour",
+#               my.main = "LASSO Negative Binomial  Cv error contour",
 #               my.xlab = "log lambda",
 #               my.ylab = "theta")
 
@@ -774,7 +787,7 @@ models.errors = data.frame(model = c("lasso",
                                      "elasticnet",
                                      "scad",
                                      "mcp",
-                                     "lasso_poisson",
+                                     "poisson_lasso",
                                      "poisson_elasticnet"),
                            test_error = c(models_summary$lasso$test_error,
                                           models_summary$elasticnet$test_error,
@@ -786,20 +799,42 @@ models.errors = data.frame(model = c("lasso",
 models.errors
 ```
 
-```{r}
-plot(models_summary$lasso$beta, pch = 16)
+```{r,  fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d}
+
+par(mfrow = c(1,2))
+plot(models_summary$lasso$beta, pch = 16,
+     main = "LASSO & Elasticnet beta estimates",
+     xlab = "beta index", ylab = "beta")
 points(models_summary$elasticnet$beta, col = "red", pch = 16)
 
+legend("bottomright",
+       legend = c("LASSO", "Elasticnet"),
+       col = c(1,2),
+       lty = 1)
 
-plot(models_summary$scad$beta, pch = 16)
-points(models_summary$mcp$beta, col = "red", pch = 16)
-
-
-plot(models_summary$lasso.poi$beta, pch = 16)
+plot(models_summary$lasso.poi$beta, pch = 16,
+      main = "Poisson LASSO & Elasticnet beta estimates",
+     xlab = "beta index", ylab = "beta")
 points(models_summary$elasticnet.poi$beta, col = "red", pch = 16)
+
+legend("bottomright",
+       legend = c("LASSO", "Elasticnet"),
+       col = c(1,2),
+       lty = 1)
 ```
 
 
+```{r}
+plot(models_summary$scad$beta, pch = 16,
+      main = "SCAD & MCP beta estimates",
+     xlab = "beta index", ylab = "beta")
+points(models_summary$mcp$beta, col = "red", pch = 16)
+
+legend("bottomright",
+       legend = c("SCAD", "MCP"),
+       col = c(1,2),
+       lty = 1)
+```
 
 
 
