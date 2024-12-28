@@ -288,9 +288,9 @@ month_sets_ind = list(k4 = matrix(c(1, 5, 9,
 
 ### Matrice del modello
 
-Le matrici del modello considerate sono quella senza interazioni e quella con interazioni tra NTA e le esplicative in arrests.
+La matrice del modello considerata è quella con tutte le variabili e le interazioni tra tutte le variabili di arrests tranne KY_CD e le zone spaziali degli NTA
 ```{r, include=TRUE}
-FORMULA.NO.INTERACTIONS = as.formula("count ~. -1")
+
 
 FORMULA.YES.INTERACTIONS = as.formula("count ~. -1 +
                             NTA2020:LAW_CAT_CD + 
@@ -298,6 +298,11 @@ FORMULA.YES.INTERACTIONS = as.formula("count ~. -1 +
                             NTA2020:PERP_SEX + 
                             NTA2020:PERP_RACE")
 ```
+
+```{r}
+# FORMULA.NO.INTERACTIONS = as.formula("count ~. -1")
+```
+
 
 ```{r, warning=FALSE, results='hide'}
 
@@ -319,7 +324,7 @@ gc()
 ```
 
 
-Poichè la matrice del modello dell'insieme di verifica e quella dell'insieme di stima non condividono tutte le colonne si sceglie di ridurre le colonne di entrambe con le colonne in comune.
+Poichè la matrice del modello dell'insieme di verifica e quella dell'insieme di stima non condividono tutte le colonne si sceglie di ridurre le colonne di entrambe con l'intersezione  delle colonne in comune.
 ```{r}
 
 
@@ -352,9 +357,6 @@ month.yesint.cv.k4.sets = suppressMessages(MakeMonthCvSets(my_df = df_2010,
 ```
 
 
-
-
-
 ### Esplicative quantitative
 
 Benchè le eslplicative quantitative permettano la specificazione di diverse forme funzionali qui, per ragioni computazionali ci si limita ad assumere (forzatamente) una relazione monotona lineare con la risposta.
@@ -369,26 +371,6 @@ models_summary$lasso <- Lasso_CV(month.yesint.cv.k4.sets,
                                         my.lambda.vals = exp(seq(-13, -6, 0.1)) %>% sort(decreasing = T))
 ```
 
-
-```{r, results='hide', ,eval = bool_execute_heavy_chunks}
-temp.fit = glmnet(x = df_2010_grouped.matrix,
-                  y = log(df_2010_grouped$count) -log(12),
-                  lambda = models_summary$lasso$lmin)
-
-models_summary$lasso$beta = temp.fit$beta
-models_summary$lasso$test_error = RMSEfun(df_2011_grouped$count, 
-                                          exp(predict(temp.fit, newx = df_2011_grouped.matrix) + log(12)))
-
-temp.fit = glmnet(x = df_2010_grouped.matrix,
-                  y = log(df_2010_grouped$count) -log(12),
-                  lambda = models_summary$lasso$l1se)
-
-models_summary$lasso$beta1se = temp.fit$beta
-models_summary$lasso$test_error1se = RMSEfun(df_2011_grouped$count, 
-                                          exp(predict(temp.fit, newx = df_2011_grouped.matrix) + log(12)))
-
-
-```
 
 
 ```{r, eval = bool_execute_heavy_chunks}
@@ -671,16 +653,152 @@ par(mfrow = c(1,1))
 save(models_summary, file = file_save_name)
 ```
 
-### Modelli migliori
 
-```{r}
-extracted_best_pars  = list()
+```{r, results='hide' ,eval = bool_execute_heavy_chunks, warning=FALSE}
 
-for (model in names(models_summary)){
-  extracted_best_pars[[model]] = ExtractBestPars(models_summary[[model]])
-}
+# LASSO ---------------------
+temp.fit = glmnet(x = df_2010_grouped.matrix,
+                  y = log(df_2010_grouped$count) -log(12),
+                  lambda = models_summary$lasso$lmin)
+
+models_summary$lasso$beta = temp.fit$beta
+models_summary$lasso$test_error = RMSEfun(df_2011_grouped$count, 
+                                          exp(predict(temp.fit, newx = df_2011_grouped.matrix) + log(12)))
+
+temp.fit = glmnet(x = df_2010_grouped.matrix,
+                  y = log(df_2010_grouped$count) -log(12),
+                  lambda = models_summary$lasso$l1se)
+
+models_summary$lasso$beta1se = temp.fit$beta
+models_summary$lasso$test_error1se = RMSEfun(df_2011_grouped$count, 
+                                          exp(predict(temp.fit, newx = df_2011_grouped.matrix) + log(12)))
+
+# Elasticnet ---------------------
+temp.fit = glmnet(x = df_2010_grouped.matrix,
+                  y = log(df_2010_grouped$count) -log(12),
+                  alpha = models_summary$elasticnet$amin,
+                  lambda = models_summary$elasticnet$lmin)
+
+models_summary$elasticnet$beta = temp.fit$beta
+models_summary$elasticnet$test_error = RMSEfun(df_2011_grouped$count, 
+                                          exp(predict(temp.fit, newx = df_2011_grouped.matrix) + log(12)))
+
+
+# SCAD ---------------------
+temp.fit = picasso(X = df_2010_grouped.matrix,
+                  Y = log(df_2010_grouped$count) -log(12),
+                  gamma = models_summary$scad$gmin,
+                  lambda = models_summary$scad$lmin,
+                  method = "scad")
+
+temp.lind = which(models_summary$scad$lambda == models_summary$scad$lmin)
+
+models_summary$scad$beta = temp.fit$beta
+models_summary$scad$test_error = RMSEfun(df_2011_grouped$count, 
+                                          exp(my.predict.gaussian(temp.fit, newdata = df_2011_grouped.matrix,
+                                                               lambda.idx = 1) +
+                                                log(12)))
+
+# MCP ----------------------
+temp.fit = picasso(X = df_2010_grouped.matrix,
+                  Y = log(df_2010_grouped$count) -log(12),
+                  gamma = models_summary$mcp$gmin,
+                  lambda = models_summary$mcp$lmin,
+                  method = "mcp")
+
+temp.lind = which(models_summary$mcp$lambda == models_summary$mcp$lmin)
+
+models_summary$mcp$beta = temp.fit$beta
+models_summary$mcp$test_error = RMSEfun(df_2011_grouped$count, 
+                                          exp(my.predict.gaussian(temp.fit, newdata = df_2011_grouped.matrix,
+                                                               lambda.idx = 1) +
+                                                log(12)))
+
+
+# LASSO Poisson ---------------------
+temp.fit = glmnet(x = df_2010_grouped.matrix,
+                  y = df_2010_grouped$count,
+                  offset = rep(log(12), nrow(df_2010_grouped.matrix)),
+                  lambda = models_summary$lasso.poi$lmin,
+                  family = poisson())
+
+models_summary$lasso.poi$beta = temp.fit$beta
+models_summary$lasso.poi$test_error = RMSEfun(df_2011_grouped$count, 
+                                          predict(temp.fit,
+                                                  newx = df_2011_grouped.matrix,
+                                                  newoffset = rep(log(12), nrow(df_2011_grouped.matrix)),
+                                                  type = "response"))
+
+temp.fit = glmnet(x = df_2010_grouped.matrix,
+                  y = df_2010_grouped$count,
+                  offset = rep(log(12), nrow(df_2010_grouped.matrix)),
+                  lambda = models_summary$lasso.poi$l1se,
+                  family = poisson())
+
+models_summary$lasso.poi$beta1se = temp.fit$beta
+models_summary$lasso.poi$test_error1se = RMSEfun(df_2011_grouped$count, 
+                                          predict(temp.fit,
+                                                  newx = df_2011_grouped.matrix,
+                                                  newoffset = rep(log(12), nrow(df_2011_grouped.matrix),
+                                                  type = "response")))
+
+
+# Elasticnet Poisson ---------------------
+temp.fit = glmnet(x = df_2010_grouped.matrix,
+                  y = df_2010_grouped$count,
+                  offset = rep(log(12), nrow(df_2010_grouped.matrix)),
+                  alpha = models_summary$elasticnet.poi$amin,
+                  lambda = models_summary$lasso.poi$lmin,
+                  family = poisson())
+
+models_summary$elasticnet.poi$beta = temp.fit$beta
+models_summary$elasticnet.poi$test_error = RMSEfun(df_2011_grouped$count, 
+                                          predict(temp.fit,
+                                                  newx = df_2011_grouped.matrix,
+                                                  newoffset = rep(log(12), nrow(df_2011_grouped.matrix),
+                                                  type = "response")))
 
 ```
+
+```{r}
+# backup to save key model info
+save(models_summary, file = file_save_name)
+```
+
+
+### Modelli migliori
+
+Si riportano gli errori di previsione sui dati del 2011 dei vari modelli migliori stimati sui dati completi 2010. 
+```{r}
+models.errors = data.frame(model = c("lasso",
+                                     "elasticnet",
+                                     "scad",
+                                     "mcp",
+                                     "lasso_poisson",
+                                     "poisson_elasticnet"),
+                           test_error = c(models_summary$lasso$test_error,
+                                          models_summary$elasticnet$test_error,
+                                          models_summary$scad$test_error,
+                                          models_summary$mcp$test_error,
+                                          models_summary$lasso.poi$test_error,
+                                          models_summary$elasticnet.poi$test_error))
+
+models.errors
+```
+
+```{r}
+plot(models_summary$lasso$beta, pch = 16)
+points(models_summary$elasticnet$beta, col = "red", pch = 16)
+
+
+plot(models_summary$scad$beta, pch = 16)
+points(models_summary$mcp$beta, col = "red", pch = 16)
+
+
+plot(models_summary$lasso.poi$beta, pch = 16)
+points(models_summary$elasticnet.poi$beta, col = "red", pch = 16)
+```
+
 
 
 
