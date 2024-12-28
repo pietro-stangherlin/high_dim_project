@@ -37,12 +37,15 @@ MakeMonthCvSets <- function(my_df, month_sets_ind, formula) {
   
   for (i in 1:nrow(month_sets_ind)) {
     # Make sublists
+    train_month_indexes = setdiff(1:12, month_sets_ind[i, ])
+    test_month_indexes = month_sets_ind[i, ]
+    
     cv.sets[[i]] <- list(train = list(df = NA, model_matrix = NA),
                          test = list(df = NA, model_matrix = NA))
     
     # Populate the sublists
     cv.sets[[i]]$train$df <- GroupByMONTHSets(mydf = my_df,
-                                              month_indexes = setdiff(1:12, month_sets_ind[i, ]))
+                                              month_indexes = train_month_indexes)
     
     cv.sets[[i]]$train$model_matrix <- sparse.model.matrix(formula,
                                                            data = cv.sets[[i]]$train$df)
@@ -52,7 +55,7 @@ MakeMonthCvSets <- function(my_df, month_sets_ind, formula) {
     
     
     cv.sets[[i]]$test$df <- GroupByMONTHSets(mydf = my_df,
-                                             month_indexes = month_sets_ind[i, ])
+                                             month_indexes = test_month_indexes)
     
     cv.sets[[i]]$test$model_matrix <- sparse.model.matrix(formula,
                                                           data = cv.sets[[i]]$test$df)
@@ -64,6 +67,53 @@ MakeMonthCvSets <- function(my_df, month_sets_ind, formula) {
   
   return(cv.sets)
 }
+
+MakeMonthCvSetsZeros <- function(my_df, zeros_df, month_sets_ind, formula) {
+  cv.sets <- list()
+  
+  for (i in 1:nrow(month_sets_ind)) {
+    # Make sublists
+    train_month_indexes = setdiff(1:12, month_sets_ind[i, ])
+    test_month_indexes = month_sets_ind[i, ]
+    
+    zeros_train = zeros_df %>% filter(MONTH %in% train_month_indexes)
+    zeros_train[,"MONTH"] = NULL
+    zeros_test = zeros_df %>% filter(MONTH %in% test_month_indexes)
+    zeros_test[,"MONTH"] = NULL
+    
+    
+    cv.sets[[i]] <- list(train = list(df = NA, model_matrix = NA),
+                         test = list(df = NA, model_matrix = NA))
+    
+    # Populate the sublists
+    cv.sets[[i]]$train$df <- GroupByMONTHSets(mydf = my_df,
+                                              month_indexes = train_month_indexes)
+    
+    cv.sets[[i]]$train$df = bind_rows(cv.sets[[i]]$train$df, zeros_train)
+    
+    cv.sets[[i]]$train$model_matrix <- sparse.model.matrix(formula,
+                                                           data = cv.sets[[i]]$train$df)
+    
+    # here it's the number of months considered
+    cv.sets[[i]]$train$offset.constant <- length(setdiff(1:12, ncol(month_sets_ind)))
+    
+    
+    cv.sets[[i]]$test$df <- GroupByMONTHSets(mydf = my_df,
+                                             month_indexes = test_month_indexes)
+    
+    cv.sets[[i]]$test$df = bind_rows(cv.sets[[i]]$test$df, zeros_test)
+    
+    cv.sets[[i]]$test$model_matrix <- sparse.model.matrix(formula,
+                                                          data = cv.sets[[i]]$test$df)
+    
+    # here it's the number of months considered
+    cv.sets[[i]]$test$offset.constant <- length(ncol(month_sets_ind))
+    gc()
+  }
+  
+  return(cv.sets)
+}
+
 
 MakeYearCvSets <- function(my_df, year_sets_ind, all_years_set, formula) {
   cv.sets <- list()

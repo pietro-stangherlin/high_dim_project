@@ -1,8 +1,9 @@
 ---
 title: "Arrests 2010 NTA: Analisi"
 output: pdf_document
-eometry: margin=1cm
 ---
+
+# Analisi NTA 2010 - 2011 interazione tra variabili
 
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(echo = FALSE)
@@ -19,8 +20,8 @@ OUT.WIDTH.1d = "100%"
 OUT.HEIGHT.1d = "100%"
 
 # plotting parameters 2d plots
-OUT.WIDTH = "45%"
-OUT.HEIGHT = "45%"
+OUT.WIDTH = "60%"
+OUT.HEIGHT = "70%"
 
 source("functions_script.R")
 ```
@@ -32,15 +33,11 @@ source("functions_script.R")
 
 bool_execute_heavy_chunks = FALSE
 file_save_name = "arrests_nta_2010_models_summary.Rdata"
+load(file_save_name)
 
-# require loading models_summary list
-if(!bool_execute_heavy_chunks){
-  load(file_save_name)
-} else{
-  # store each model useful information:
-  # validation error and beta for best lambda
-  models_summary = list()
-}
+file_joined_zero_counts_2010_df = "joined_zero_counts_2010.Rdata"
+load(file_joined_zero_counts_2010_df)
+
 
 
 # best models fitted on all data
@@ -122,32 +119,6 @@ df_2011 = na.omit(df_2011)
 L'obbiettivo di questa sezione di analisi è verificare se esiste un sottoinsieme di variabili esplicative particolarmente correlate con il numero di arresti, sia marginalmente che considerando l'interazione con ciascuna zona spaziale (NTA).
 Per vincoli computazionali si riduce l'insieme di stima al solo anno 2010: per quest'anno i dati del censo sono esatti e non si sono verificati eventi rari a differenza del 2020 (Covid); l'insieme di verifica scelto è l'anno 2011, in quanto è l'anno più vicino al 2010 (l'assunzione è che i due anni siano abbastanza simili per il fenomeno considerato).
 
-### Variabili considerate
-
-Viene riportata la lista delle variabili considerate con una breve descrizione.
-
-Le variabili considerate dal dataset arrests sono:
-
-- KY_CD (fattore con 70 livelli): categoria granulare del crimine causa dell'arresto
-- LAW_CAT_CD (fattore con 5 livelli): categoriea generale del crimine causa dell'arresto
-- AGE_GROUP (fattore con 5 livelli): classe d'età dell'arrestato
-- PERP_SEX  (fattore con 2 livelli): sesso dell'arrestato
-- PERP_RACE (fattore con 7 livelli): etnia dell'arrestato
-- NTA2020 (fattore con 251 livelli): indicatore della specifica NTA del luogo dell'arresto
-- MONTH (fattore con 12 livelli): indicatore del mese dell'arresto
-
-Le variabili considerate dal censo sono:
-- Pop1 (numerica): popolazione per NTA
-- MaleP (numerica): percentuale di maschi per NTA
-- MdAge (numerica): età mediana per NTA
-- Hsp1P (numerica): percentuale di ispanici per NTA
-- WNHP (numerica): percentuale di bianchi non ispanici (NH) per NTA
-- BNHP (numerica): percentuale di neri non ispanici per NTA
-- ANHP (numerica): percentuale di asiatici non ispanici per NTA
-- OthNHP (numerica): percentuale di altre etnie non ispaniche per NTA
-- MIncome (numerica): reddito mediano per NTA
-
-
 ### Problematiche
 
 Questi dati presentano diverse problematiche.
@@ -156,13 +127,85 @@ Le scelte fatte sono dovute a fattori computazionali, di tempo e al fatto che pe
 
 Per selezione delle variabili di stratificazione per zona da includere, benchè il censo fornisca molte variabili si è scelto di considerarne solo un esiguo sottoinsieme: ciò è dovuto a una mancanza di conoscenza di campo e al non poter dedicare eccessivo tempo alla selezione ed in particolare all'estrazione delle stesse dai varia database e fogli di calcolo.
 
-Per la definizione delle zone spaziali e degli intervalli temporali.
-Inizialmente si era pensato di eseguire le analisi sull'unità spaziale più piccola disponibile per cui sono presenti i dati del censo: i "Census Tracts" (CT) che per New York sono più di 2000 zone distinte (a differenza delle 250 degli NTA), si è però subito verificato che con i mezzi a disposizione lavorare su modelli con i CT era improponibile a causa delle eccessive risorse computazionali richieste. Per quanto concerne gli intervalli temporali si è scelto di ignorare i possibili trend e considerare i singoli anni, per ciascun anno si sono utilizzati i mesi per la costruzione degli insiemi di convalida incrociata. Pur avendo a disposizione il giorno di ciascun arresto la selezione dei mesi è apparsa come un giusto compromesso per garantire dei conteggi superiori a 1.
+Per quanto concerne gli intervalli temporali si è scelto di ignorare i possibili trend e considerare i singoli anni, per ciascun anno si sono utilizzati i mesi per la costruzione degli insiemi di convalida incrociata. Pur avendo a disposizione il giorno di ciascun arresto la selezione dei mesi è apparsa come un giusto compromesso per garantire dei conteggi superiori a 1.
 
 Pur avendo notevolmente ridotto la potenziale complessità del problema il numero di osservazioni e il numero di modalità dei fattori alcune procedure impiegate possono comunque molto tempo (sulle piattaforme di calcolo impiegate) per essere eseguite: questi limiti rendono proibitive valutazioni dell'incertezza nelle stime, quali metodi bootstrap o bayesiani.
 
 Poichè i conteggi sono costruiti raggruppando le osservazioni con le stesse combinazioni di modalità delle covariate, il conteggio minimo osservabile è uguale a 1.
-Ciò pone dei possibili problemi nella stima di modelli che comprendono lo zero nel supporto (ad esempio il modello di Poisson). Si è comunque provato ad adattare modelli (sia a risposta continua che discreta) su questa tipologia di dati, una delle possibili soluzioni al di fuori di impiegare modelli diversi è la metodologia "zero padding" in cui per ogni combinazione di variabili per cui non si verificano casi si aggiunge un'osservazione con conteggio nullo: la criticità qui è computazionale dovuta all'incremento notevole delle osservazioni.
+Ciò pone dei possibili problemi nella stima di modelli che comprendono lo zero nel supporto (ad esempio il modello di Poisson). Si è comunque provato ad adattare modelli (sia a risposta continua che discreta) su questa tipologia di dati.
+in linea teorica si dovrebbe aggiungere un'osservazione con conteggio nullo per ogni combinazione di variabili per cui non si verificano casi, la criticità qui è computazionale dovuta all'incremento notevole delle osservazioni; una possibile soluzione è estrarre casualmente un ridotto sottoinsieme di osservazioni con conteggio nullo.
+
+
+```{r, eval = bool_execute_heavy_chunks, results='hide'}
+library(hash)
+
+set.seed(123)
+
+# Save NTA stratification info
+nta_strat_df <- df_2010 %>% 
+  dplyr::select(-c(KY_CD, AGE_GROUP, PERP_RACE, PERP_SEX, LAW_CAT_CD, MONTH)) %>% 
+  unique()
+
+df_2010_no_strat <- df_2010 %>% 
+  dplyr::select(-c(Pop1, MdAge, MaleP, Hsp1P, BNHP, OthNHP, WNHP, ANHP, MIncome))
+
+# Number of zero count observations added to each month multiplied by the number of months
+Z <- 5 * 10^3
+
+# Initialize the zero counts data frame
+zero_counts_2010_df <- as.data.frame(matrix(NA, nrow = Z * 12, ncol = ncol(df_2010_no_strat)))
+colnames(zero_counts_2010_df) <- colnames(df_2010_no_strat)
+
+# Get unique values for each column
+unique_vals <- apply(df_2010_no_strat, 2, unique)
+
+# Create a hash set to store existing combinations
+existing_combinations <- hash()
+
+# Add existing combinations to the hash set
+for (i in 1:nrow(df_2010_no_strat)) {
+  key <- paste(df_2010_no_strat[i, ], collapse = "_")
+  existing_combinations[[key]] <- TRUE
+}
+
+# Generate zero counts for each month
+for (month in 1:12) {
+  for (i in 1:Z) {
+    cond <- TRUE
+    
+    while (cond) {
+      proposal <- sapply(unique_vals, function(el) sample(el, 1))
+      proposal["MONTH"] <- factor(month, levels = 1:12)
+      key <- paste(proposal, collapse = "_")
+      
+      if (!has.key(key, existing_combinations)) {
+        zero_counts_2010_df[(month - 1) * Z + i, ] <- proposal
+        existing_combinations[[key]] <- TRUE
+        cond <- FALSE
+      }
+    }
+  }
+}
+
+# Join with NTA stratification info
+joined_zero_counts_2010_df <- left_join(zero_counts_2010_df, nta_strat_df, by = "NTA2020")
+
+
+# Clean up
+rm(df_2010_no_strat)
+rm(zero_counts_2010_df)
+gc()
+
+# Add count column
+joined_zero_counts_2010_df$count <- 0
+
+joined_zero_counts_2010_df = joined_zero_counts_2010_df %>% mutate(across(where(is.character), as.factor))
+
+
+save(joined_zero_counts_2010_df, file = file_joined_zero_counts_2010_df)
+
+```
+
 
 
 ```{r, results='hide'}
@@ -357,6 +400,16 @@ month.yesint.cv.k4.sets = suppressMessages(MakeMonthCvSets(my_df = df_2010,
 ```
 
 
+```{r}
+# make cv folds adding the zero counts
+
+month.zeros.cv.k4.sets = suppressMessages(MakeMonthCvSetsZeros(my_df = df_2010,
+                                              zeros_df = joined_zero_counts_2010_df,
+                                              month_sets_ind = month_sets_ind$k4,
+                       formula = FORMULA.YES.INTERACTIONS))
+```
+
+
 ### Esplicative quantitative
 
 Benchè le eslplicative quantitative permettano la specificazione di diverse forme funzionali qui, per ragioni computazionali ci si limita ad assumere (forzatamente) una relazione monotona lineare con la risposta.
@@ -373,7 +426,7 @@ Per i metodi SCAD e MCP, poichè "ncvreg" presenta dei problemi computazionali d
 
 ```{r, eval = bool_execute_heavy_chunks}
 models_summary$lasso <- Lasso_CV(month.yesint.cv.k4.sets,
-                                        my.lambda.vals = exp(seq(-20, -6, 0.1)) %>% sort(decreasing = T))
+                                        my.lambda.vals = exp(seq(-20, 2, 0.1)) %>% sort(decreasing = T))
 ```
 
 
@@ -381,95 +434,28 @@ models_summary$lasso <- Lasso_CV(month.yesint.cv.k4.sets,
 ```{r, eval = bool_execute_heavy_chunks}
 
 models_summary$elasticnet = Elastic_Cv(cv.sets = month.yesint.cv.k4.sets,
-                                             my.lambda.vals = exp(seq(-20, -6, 0.1)) %>% sort(decreasing = TRUE),
-                                             my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 20))
+                                             my.lambda.vals = exp(seq(-20, 2, 0.3)) %>% sort(decreasing = TRUE),
+                                             my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 10))
 ```
 
-
-```{r, eval = bool_execute_heavy_chunks}
-temp.fit = glmnet(x = df_2010_grouped.matrix,
-                  y = log(df_2010_grouped$count) -log(12),
-                  alpha = models_summary$elasticnet$amin,
-                  lambda = models_summary$elasticnet$lmin)
-
-models_summary$elasticnet$beta = temp.fit$beta
-models_summary$elasticnet$test_error = RMSEfun(df_2011_grouped$count, 
-                                          exp(predict(temp.fit, newx = df_2011_grouped.matrix) + log(12)))
-```
-
-
-```{r}
-# A = colnames(month.noint.cv.k4.sets[[1]]$train$df)
-# # Create a named vector to map prefixes to values
-# prefix_to_value <- setNames(seq_along(A), A) 
-# 
-# B = colnames(month.noint.cv.k4.sets[[1]]$train$model_matrix)
-# 
-# # Create indexes vector
-# var_indexes <- sapply(B, function(item) {
-#   prefix <- A[sapply(A, function(prefix) startsWith(item, prefix))]
-#   prefix_to_value[prefix]
-# })
-
-```
-
-
-```{r}
-# models_summary$glasso = GLasso_CV(month.noint.cv.k4.sets,
-#                                         my.lambda.vals = exp(seq(-17, -6, 0.1)) %>% sort(decreasing = T),
-#                                   group_index = var_indexes)
-```
 
 
 ```{r, warning = FALSE, eval = bool_execute_heavy_chunks}
 models_summary$scad = NonConvex_Cv(cv.sets = month.yesint.cv.k4.sets,
-                                             my.lambda.vals = exp(seq(-5, 1, 0.2)) %>% sort(decreasing = TRUE),
-                                             my.gamma.vals = seq(2+1e-05, 10, length = 10),
+                                             my.lambda.vals = exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE),
+                                             my.gamma.vals = seq(2+1e-05, 5, length = 5),
                                          my.penalty = "scad")
 
 ```
 
 
-
-```{r,  warning=FALSE, eval = bool_execute_heavy_chunks}
-# temp.fit = ncvreg(x = as.matrix(df_2010_grouped.matrix),
-#                  y = log(df_2010_grouped$count) -log(12),
-#                  gamma = models_summary$scad$gmin,
-#                  penalty = "SCAD")
-# 
-# plot(temp.fit, log.l = TRUE)
-# abline(v = log(models_summary$scad$lmin), col = "blue", lty = 2, lwd = 2)
-# 
-# models_summary$scad$beta = temp.fit$beta
-# models_summary$scad$test_error = RMSEfun(df_2011_grouped$count, 
-#                                           exp(predict(temp.fit, X = df_2011_grouped.matrix) + log(12)))
-```
-
-
 ```{r, warning = FALSE, eval = bool_execute_heavy_chunks}
 models_summary$mcp = NonConvex_Cv(cv.sets = month.yesint.cv.k4.sets,
-                                             my.lambda.vals = exp(seq(-5, 5, 0.2)) %>% sort(decreasing = TRUE),
-                                             my.gamma.vals = seq(2+1e-05, 10, length = 10),
+                                             my.lambda.vals = exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE),
+                                             my.gamma.vals = seq(2+1e-05, 5, length = 5),
                                          my.penalty = "mcp")
 ```
 
-
-```{r, eval = bool_execute_heavy_chunks}
-# temp.fit = ncvreg(x = as.matrix(df_2010_grouped.matrix),
-#                  y = log(df_2010_grouped$count) -log(12),
-#                  gamma = models_summary$mcp$gmin,
-#                  penalty = "MCP")
-# 
-# plot(temp.fit, log.l = TRUE)
-# abline(v = log(models_summary$mcp$lmin), col = "blue", lty = 2, lwd = 2)
-# 
-# models_summary$mcp$beta = temp.fit$beta
-# models_summary$mcp$test_error = RMSEfun(df_2011_grouped$count, 
-#                                           exp(predict(temp.fit, X = df_2011_grouped.matrix) + log(12)))
-
-
-
-```
 
 ```{r}
 # backup to save key model info
@@ -482,11 +468,6 @@ save(models_summary, file = file_save_name)
 glmnet.control(mxitnr = 50) # increase maximum no. of IRLS iterations allowed
 ```
 
-```{r, eval = bool_execute_heavy_chunks, warning=FALSE}
-# models_summary$lasso.poi.noint = Lasso_Offset_CV(cv.sets = month.noint.cv.k4.sets,
-#                                           my.lambda.vals = exp(seq(-15, 3, 0.1)) %>% sort(decreasing = TRUE),
-#                                           my.family = poisson())
-```
 
 ```{r, eval = bool_execute_heavy_chunks, warning=FALSE}
 models_summary$lasso.poi = Lasso_Offset_CV(cv.sets = month.yesint.cv.k4.sets,
@@ -494,7 +475,11 @@ models_summary$lasso.poi = Lasso_Offset_CV(cv.sets = month.yesint.cv.k4.sets,
                                           my.family = poisson())
 ```
 
-
+```{r, eval = bool_execute_heavy_chunks, warning=FALSE}
+models_summary$lasso.zeros.noint = Lasso_Offset_CV(cv.sets = month.zeros.cv.k4.sets,
+                                          my.lambda.vals = exp(seq(-15, 3, 0.1)) %>% sort(decreasing = TRUE),
+                                          my.family = poisson())
+```
 
 ```{r}
 # backup to save key model info
@@ -503,14 +488,16 @@ save(models_summary, file = file_save_name)
 
 
 ```{r, warning=FALSE, eval = bool_execute_heavy_chunks}
-# models_summary$elasticnet.poi.noint = Elastic_Offset_Cv(cv.sets = month.noint.cv.k4.sets,
-#                                                         my.lambda.vals = exp(seq(-10, 2, 0.2)) %>% sort(decreasing = TRUE),
-#                                                         my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 20),
-#                                                         my.family = poisson())
+models_summary$elasticnet.poi = Elastic_Offset_Cv(cv.sets = month.yesint.cv.k4.sets,
+                                                        my.lambda.vals = exp(seq(-10, 2, 0.2)) %>% sort(decreasing = TRUE),
+                                                        my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 10),
+                                                        my.family = poisson())
 ```
 
+
+
 ```{r, warning=FALSE, eval = bool_execute_heavy_chunks}
-models_summary$elasticnet.poi = Elastic_Offset_Cv(cv.sets = month.yesint.cv.k4.sets,
+models_summary$elasticnet.poi.zeros = Elastic_Offset_Cv(cv.sets = month.zeros.cv.k4.sets,
                                                         my.lambda.vals = exp(seq(-10, 2, 0.2)) %>% sort(decreasing = TRUE),
                                                         my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 20),
                                                         my.family = poisson())
@@ -544,11 +531,12 @@ PlotOneDim(x = log(models_summary$lasso.poi$lambda),
 ```
 
 
-Elasticnet individua in entrambi i casi un $\alpha$ prossimo a zero (ridge), nel modello normale presenta una soluzione molto vicina alle stime non penalizzate ($\lambda$ è prossimo a zero), mentre nel modello Poisson il $\lambda$ selezionato è 
+Elasticnet individua in entrambi i casi un $\alpha$ prossimo a zero (ridge, possibilmente data la forte correlazione tra covariate nella costruzione della matrice del modello), nel modello normale presenta una soluzione molto vicina alle stime non penalizzate ($\lambda$ è prossimo a zero), mentre nel modello Poisson il $\lambda$ selezionato è 
 
 ```{r}
 models_summary$elasticnet.poi$lmin
 ```
+
 
 
 ```{r, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT}
@@ -779,61 +767,113 @@ save(models_summary, file = file_save_name)
 ```
 
 
+Benchè con la libreria impiegata non siano fornite informazione precise sulla regione delle stime si può comunque provare a valutare la stabilità graficamente.
+
+```{r, fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d, warning=FALSE}
+
+par(mfrow = c(1,2))
+
+# SCAD ---------------------
+temp.fit = picasso(X = df_2010_grouped.matrix,
+                  Y = log(df_2010_grouped$count) -log(12),
+                  gamma = models_summary$scad$gmin,
+                  lambda = models_summary$scad$lambda,
+                  method = "scad")
+
+plot(log(temp.fit$lambda), t(temp.fit$beta),
+             type = "l", main = "SCAD Regularization Path", 
+    xlab = "Regularization Parameter", ylab = "Coefficient")
+abline(v = log(models_summary$scad$lmin))
+
+# MCP ----------------------
+temp.fit = picasso(X = df_2010_grouped.matrix,
+                  Y = log(df_2010_grouped$count) -log(12),
+                  gamma = models_summary$mcp$gmin,
+                  lambda = models_summary$mcp$lambda,
+                  method = "mcp")
+
+matplot(log(temp.fit$lambda), t(temp.fit$beta),
+        type = "l", main = "MCP Regularization Path", 
+    xlab = "Regularization Parameter", ylab = "Coefficient")
+abline(v = log(models_summary$mcp$lmin))
+
+par(mfrow = c(1,1))
+```
+
+```{r, results='hide'}
+rm(temp.fit)
+suppressMessages(gc())
+```
+
+
+
+
 ### Modelli migliori
 
 Si riportano gli errori di previsione sui dati del 2011 dei vari modelli migliori stimati sui dati completi 2010. 
 ```{r}
 models.errors = data.frame(model = c("lasso",
+                                     "lasso.1se",
                                      "elasticnet",
                                      "scad",
                                      "mcp",
                                      "poisson_lasso",
+                                     "poisson_lasso1se",
                                      "poisson_elasticnet"),
                            test_error = c(models_summary$lasso$test_error,
+                                          models_summary$lasso$test_error1se,
                                           models_summary$elasticnet$test_error,
                                           models_summary$scad$test_error,
                                           models_summary$mcp$test_error,
                                           models_summary$lasso.poi$test_error,
+                                          models_summary$lasso.poi$test_error1se,
                                           models_summary$elasticnet.poi$test_error))
 
 models.errors
 ```
 
+
+I grafici dei coefficienti stimati confermano, per LASSO ed Elasticnet una non selezione delle variabili.
 ```{r,  fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d}
 
 par(mfrow = c(1,2))
 plot(models_summary$lasso$beta, pch = 16,
-     main = "LASSO & Elasticnet beta estimates",
-     xlab = "beta index", ylab = "beta")
-points(models_summary$elasticnet$beta, col = "red", pch = 16)
+     main = "LASSO & Elasticnet",
+     xlab = "beta index", ylab = "beta",
+     ylim = range(c(as.vector(models_summary$lasso$beta),as.vector(models_summary$elasticnet$beta))))
+points(models_summary$elasticnet$beta, col = "red")
 
 legend("bottomright",
        legend = c("LASSO", "Elasticnet"),
        col = c(1,2),
-       lty = 1)
+       lty = 1,
+       bty = "n")
 
 plot(models_summary$lasso.poi$beta, pch = 16,
-      main = "Poisson LASSO & Elasticnet beta estimates",
-     xlab = "beta index", ylab = "beta")
-points(models_summary$elasticnet.poi$beta, col = "red", pch = 16)
+      main = "Poisson LASSO & Elasticnet",
+     xlab = "beta index", ylab = "beta",
+     ylim = range(c(as.vector(models_summary$lasso.poi$beta), as.vector(models_summary$elasticnet.poi$beta))))
+points(models_summary$elasticnet.poi$beta, col = "red")
 
 legend("bottomright",
        legend = c("LASSO", "Elasticnet"),
        col = c(1,2),
-       lty = 1)
+       lty = 1,
+       bty = "n")
 ```
-
 
 ```{r}
 plot(models_summary$scad$beta, pch = 16,
       main = "SCAD & MCP beta estimates",
-     xlab = "beta index", ylab = "beta")
-points(models_summary$mcp$beta, col = "red", pch = 16)
+     xlab = "beta index", ylab = "beta",
+     ylim = range(c(as.vector(models_summary$scad$beta), as.vector(models_summary$mcp$beta))))
+points(models_summary$mcp$beta, col = "red")
 
 legend("bottomright",
        legend = c("SCAD", "MCP"),
        col = c(1,2),
-       lty = 1)
+       lty = 1,
+       bty = "n")
 ```
 
 
