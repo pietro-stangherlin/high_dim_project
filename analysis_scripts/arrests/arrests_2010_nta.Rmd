@@ -340,10 +340,15 @@ FORMULA.YES.INTERACTIONS = as.formula("count ~. -1 +
                             NTA2020:AGE_GROUP + 
                             NTA2020:PERP_SEX + 
                             NTA2020:PERP_RACE")
-```
 
-```{r}
-# FORMULA.NO.INTERACTIONS = as.formula("count ~. -1")
+# if count is the response variable and and count = 0
+# the sparse matrix deletes the row...
+
+FORMULA.YES.INTERACTIONS.sparse = as.formula("temp_response ~. -1 - count +
+                            NTA2020:LAW_CAT_CD + 
+                            NTA2020:AGE_GROUP + 
+                            NTA2020:PERP_SEX + 
+                            NTA2020:PERP_RACE")
 ```
 
 
@@ -406,7 +411,7 @@ month.yesint.cv.k4.sets = suppressMessages(MakeMonthCvSets(my_df = df_2010,
 month.zeros.cv.k4.sets = suppressMessages(MakeMonthCvSetsZeros(my_df = df_2010,
                                               zeros_df = joined_zero_counts_2010_df,
                                               month_sets_ind = month_sets_ind$k4,
-                       formula = FORMULA.YES.INTERACTIONS))
+                       formula = FORMULA.YES.INTERACTIONS.sparse))
 ```
 
 
@@ -443,7 +448,7 @@ models_summary$elasticnet = Elastic_Cv(cv.sets = month.yesint.cv.k4.sets,
 ```{r, warning = FALSE, eval = bool_execute_heavy_chunks}
 models_summary$scad = NonConvex_Cv(cv.sets = month.yesint.cv.k4.sets,
                                              my.lambda.vals = exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE),
-                                             my.gamma.vals = seq(2+1e-05, 5, length = 5),
+                                             my.gamma.vals = seq(2+1e-05, 10, length = 10),
                                          my.penalty = "scad")
 
 ```
@@ -452,7 +457,7 @@ models_summary$scad = NonConvex_Cv(cv.sets = month.yesint.cv.k4.sets,
 ```{r, warning = FALSE, eval = bool_execute_heavy_chunks}
 models_summary$mcp = NonConvex_Cv(cv.sets = month.yesint.cv.k4.sets,
                                              my.lambda.vals = exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE),
-                                             my.gamma.vals = seq(2+1e-05, 5, length = 5),
+                                             my.gamma.vals = seq(1+1e-05, 10, length = 10),
                                          my.penalty = "mcp")
 ```
 

@@ -91,8 +91,13 @@ MakeMonthCvSetsZeros <- function(my_df, zeros_df, month_sets_ind, formula) {
     
     cv.sets[[i]]$train$df = bind_rows(cv.sets[[i]]$train$df, zeros_train)
     
+    # just to make the sparse matrix
+    cv.sets[[i]]$train$df$temp_response = 1:nrow(cv.sets[[i]]$train$df)
+    
     cv.sets[[i]]$train$model_matrix <- sparse.model.matrix(formula,
                                                            data = cv.sets[[i]]$train$df)
+    
+    cv.sets[[i]]$train$df$temp_response = NULL
     
     # here it's the number of months considered
     cv.sets[[i]]$train$offset.constant <- length(setdiff(1:12, ncol(month_sets_ind)))
@@ -103,8 +108,13 @@ MakeMonthCvSetsZeros <- function(my_df, zeros_df, month_sets_ind, formula) {
     
     cv.sets[[i]]$test$df = bind_rows(cv.sets[[i]]$test$df, zeros_test)
     
+    # just to make the sparse matrix
+    cv.sets[[i]]$test$df$temp_response = 1:nrow(cv.sets[[i]]$test$df)
+    
     cv.sets[[i]]$test$model_matrix <- sparse.model.matrix(formula,
                                                           data = cv.sets[[i]]$test$df)
+    
+    cv.sets[[i]]$test$df$temp_response = NULL
     
     # here it's the number of months considered
     cv.sets[[i]]$test$offset.constant <- length(ncol(month_sets_ind))
