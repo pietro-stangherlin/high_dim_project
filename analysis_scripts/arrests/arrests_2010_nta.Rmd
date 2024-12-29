@@ -38,10 +38,10 @@ load(file_save_name)
 file_joined_zero_counts_2010_df = "rdata/joined_zero_counts_2010.Rdata"
 load(file_joined_zero_counts_2010_df)
 
-month.yesint.cv.k4.sets.name = "rdata/month_cv_set_name.RData"
+month.cv.k4.sets.name = "rdata/month_cv_set_name.RData"
 month.zeros.cv.k4.sets.name = "rdata/month_zeros_cv_set_name.RData"
 
-load(month.yesint.cv.k4.sets.name)
+load(month.cv.k4.sets.name)
 load(month.zeros.cv.k4.sets.name)
 
 # best models fitted on all data
@@ -129,18 +129,39 @@ Questi dati presentano diverse problematiche.
 
 Le scelte fatte sono dovute a fattori computazionali, di tempo e al fatto che per permettere conteggi diversi da 1 è necessario considerare zone spaziali e intervalli temporali non eccessivamente ristretti.
 
-Per selezione delle variabili di stratificazione per zona da includere, benchè il censo fornisca molte variabili si è scelto di considerarne solo un esiguo sottoinsieme: ciò è dovuto a una mancanza di conoscenza di campo e al non poter dedicare eccessivo tempo alla selezione ed in particolare all'estrazione delle stesse dai varia database e fogli di calcolo.
+Per quanto concerne gli intervalli temporali si è scelto di ignorare i possibili trend e considerare i singoli anni, per ciascun anno si sono utilizzati i mesi per la costruzione degli insiemi di convalida incrociata. Pur avendo a disposizione il giorno di ciascun arresto la selezione dei mesi è apparsa come un giusto compromesso per garantire che non tutti i conteggi fossero uguali a 1 che comunque è il conteggio minino e più frequente molto superiore a tutti gli altri conteggi:
 
-Per quanto concerne gli intervalli temporali si è scelto di ignorare i possibili trend e considerare i singoli anni, per ciascun anno si sono utilizzati i mesi per la costruzione degli insiemi di convalida incrociata. Pur avendo a disposizione il giorno di ciascun arresto la selezione dei mesi è apparsa come un giusto compromesso per garantire dei conteggi superiori a 1.
+```{r, fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d}
 
-Pur avendo notevolmente ridotto la potenziale complessità del problema il numero di osservazioni e il numero di modalità dei fattori alcune procedure impiegate possono comunque molto tempo (sulle piattaforme di calcolo impiegate) per essere eseguite: questi limiti rendono proibitive valutazioni dell'incertezza nelle stime, quali metodi bootstrap o bayesiani.
+year_grouped = suppressMessages(df_2010 %>%
+  dplyr::select(-"MONTH") %>% 
+  group_by_all() %>% 
+  summarise(count = n()))
 
-Poichè i conteggi sono costruiti raggruppando le osservazioni con le stesse combinazioni di modalità delle covariate, il conteggio minimo osservabile è uguale a 1.
-Ciò pone dei possibili problemi nella stima di modelli che comprendono lo zero nel supporto (ad esempio il modello di Poisson). Si è comunque provato ad adattare modelli (sia a risposta continua che discreta) su questa tipologia di dati.
-in linea teorica si dovrebbe aggiungere un'osservazione con conteggio nullo per ogni combinazione di variabili per cui non si verificano casi, la criticità qui è computazionale dovuta all'incremento notevole delle osservazioni; una possibile soluzione è estrarre casualmente un ridotto sottoinsieme di osservazioni con conteggio nullo.
+year_grouped$count %>%
+  table %>% 
+  barplot(main = "Arrests count 2010 (grouping by covariates)",
+       xlab = "number of arrests",
+       ylab = "absolute frequency")
+
+par(mfrow = c(1,1))
+```
+Questa "sovradispersione" di 1 è ragionevole data la costruzione dei conteggi per aggregazione di osservazioni con le stesse combinazioni di covariate; si dovrebbero inoltre aggiungere osservazioni con conteggi nulli per ogni combinazione di variabili per cui non si sono osservati arresti.
+
+Mantenere tutti i conteggi unitari rende computazionalmente molto oneroso l'addattamenteo dei modelli e può creare problemi nella selezione degli stessi 
+
+La soluzione adottata è basata sul sottocampionamento: si stabilisce una soglia per i valori di conteggi oltre cui non sottocampionare, si conta la frequenza di conteggi osservati per tale soglia e si sottocampiona un sottoinsieme di grandezza uguale a quella frequenza da ciascun sottoinsieme di conteggi con valori inferiori alla soglia.
+
+L'assunzione di fondo è che, almeno per i conteggi fino alla soglia considerata, la frequenza sia descrescente rispetto al valore degli stessi; un aspetto da sottolineare della metodologia proposta, in quanto compromesso, è che introduce distorsione nelle stime.
+
+Si considerano due tipologie di dataset, entrambi impiegano il sottocampiomamento, ma in uno i conteggi nulli sono presenti e nell'altro sono assenti (i modelli per risposta continua sono adattati impiegando una trasformazione logaritmica dei dati senza conteggi nulli).
+
+Per questo studio la soglia selezionata che è apparsa ragionevole in base alle considerazioni precedenti è 10.
 
 
 ```{r, eval = bool_execute_heavy_chunks, results='hide'}
+
+# make a zero count dataframe for each unseen combination of variable values in the original data.
 library(hash)
 
 set.seed(123)
@@ -211,66 +232,17 @@ save(joined_zero_counts_2010_df, file = file_joined_zero_counts_2010_df)
 ```
 
 
-
-```{r, results='hide'}
-year_grouped = suppressMessages(df_2010 %>%
-  dplyr::select(-"MONTH") %>% 
-  group_by_all() %>% 
-  summarise(count = n()))
-
-```
-
-
-
-A sinistra i conteggi di arresti raggruppati per valori di covariate e a destra il logaritmo della medesima quantità
-```{r, fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d}
-par(mfrow = c(1,2))
-
-year_grouped$count %>%
-  table %>% 
-  plot(main = "Arrests ratio grouped by covariates",
-       xlab = "number of arrests",
-       ylab = "absolute frequency")
-
-year_grouped$count %>% 
-  log %>% 
-  table %>% 
-  plot(main = " log arrests count grouped by covariates",
-       xlab = "log(arrests count)",
-       ylab = "absolute frequency")
-
-par(mfrow = c(1,1))
-```
-
-
-
-```{r}
-# to include zeros
-# cols_to_complete = colnames(df_2010)
-# cols_to_complete = setdiff(cols_to_complete, "MONTH")
-# 
-# # Create a data frame with all combinations of the columns
-# all_combinations <- expand_grid(!!!syms(cols_to_complete))
-# 
-# # Summarize the data and complete with zeros
-# year_grouped_zeros <- df_2010 %>%
-#   select(-MONTH) %>%
-#   group_by(across(all_of(cols_to_complete))) %>%
-#   summarise(count = n(), .groups = 'drop') %>%
-#   ungroup() %>%
-#   right_join(all_combinations, by = cols_to_complete) %>%
-#   replace_na(list(count = 0))
-# 
-# print(year_grouped_zeros)
-
-```
-
 ### Elevata dimensionalità
 
 I dati presentano elevata dimensionalità considerando le interazioni tra la variabile spaziale (NTA) e le covariate (qualitative) di arrests.
 E' comunque interessante provare i metodi di selezione delle variabili anche sui dati senza interazioni.
 
 Per avere delle misure quantitative si considera il dataset in cui si sono definiti i conteggi senza considerare i mesi: si riporta il rapporto tra il numero di osservazioni (righe) e il prodotto tra il numero di modalità di NTA e la somma delle modalità delle variabili qualitative di arrests.
+
+```{r}
+year_grouped = Subsample_Below_Threshold(df = year_grouped, threshold = 10)
+```
+
 
 ```{r}
 var_unique_len = apply(year_grouped,
@@ -291,14 +263,6 @@ nrow(year_grouped) / (var_unique_len["NTA2020"] *
                        "PERP_SEX", "PERP_RACE")]))
 ```
 
-
-
-```{r}
-
-# Poichè dopo alcune prove le procedure si sono rivelate troppo onerose includendo KY_CD si è deciso di # rimuoverla confidando che l'informazione fornita da LAW_CAT_CD sia comunuque informativa.
-# df_2010$KY_CD = NULL
-# df_2011$KY_CD = NULL
-```
 
 ## Modelli
 
@@ -335,7 +299,7 @@ month_sets_ind = list(k4 = matrix(c(1, 5, 9,
 
 ### Matrice del modello
 
-La matrice del modello considerata è quella con tutte le variabili e le interazioni tra tutte le variabili di arrests tranne KY_CD e le zone spaziali degli NTA
+La matrice del modello considerata è quella con tutte le variabili e le interazioni tra tutte le variabili di arrests tranne KY_CD (per ragioni computazionali) e le zone spaziali degli NTA.
 ```{r, include=TRUE}
 
 
@@ -345,7 +309,7 @@ FORMULA.YES.INTERACTIONS = as.formula("count ~. -1 +
                             NTA2020:PERP_SEX + 
                             NTA2020:PERP_RACE")
 
-# if count is the response variable and and count = 0
+# if count is the response variable and count = 0
 # the sparse matrix deletes the row...
 
 FORMULA.YES.INTERACTIONS.sparse = as.formula("temp_response ~. -1 - count +
@@ -398,37 +362,32 @@ df_2011_grouped.matrix = df_2011_grouped.matrix[,common_col_names]
 ```{r, eval = bool_execute_heavy_chunks}
 # make cv folds
 
-# NO interaction
-# month.noint.cv.k4.sets = suppressMessages(MakeMonthCvSets(my_df = df_2010,
-#                        month_sets_ind = month_sets_ind$k4,
-#                        formula = FORMULA.NO.INTERACTIONS))
-# 
-month.yesint.cv.k4.sets = suppressMessages(MakeMonthCvSets(my_df = df_2010,
+set.seed(123)
+
+month.cv.k4.sets = suppressMessages(MakeMonthCvSets(my_df = df_2010,
                        month_sets_ind = month_sets_ind$k4,
-                       formula = FORMULA.YES.INTERACTIONS))
+                       formula = FORMULA.YES.INTERACTIONS,
+                       threshold = 10))
+
+save(month.cv.k4.sets, file = month.cv.k4.sets.name)
 
 
-
-
-save(month.yesint.cv.k4.sets, file = month.yesint.cv.k4.sets.name)
-```
-
-
-```{r, eval = bool_execute_heavy_chunks}
 # make cv folds adding the zero counts
 
 month.zeros.cv.k4.sets = suppressMessages(MakeMonthCvSetsZeros(my_df = df_2010,
                                               zeros_df = joined_zero_counts_2010_df,
                                               month_sets_ind = month_sets_ind$k4,
-                       formula = FORMULA.YES.INTERACTIONS.sparse))
+                       formula = FORMULA.YES.INTERACTIONS.sparse,
+                       threshold = 10))
 
 save(month.zeros.cv.k4.sets, file = month.zeros.cv.k4.sets.name)
 ```
 
 
+
 ### Esplicative quantitative
 
-Benchè le eslplicative quantitative permettano la specificazione di diverse forme funzionali qui, per ragioni computazionali ci si limita ad assumere (forzatamente) una relazione monotona lineare con la risposta.
+IL dtaset presenta principalmente esplicative categoriali, benchè le due esplicative quantitative (MdAge) permettano la specificazione di diverse forme funzionali qui, per ragioni computazionali ci si limita ad assumere una relazione monotona lineare con la risposta.
 
 ### Modelli per risposta continua
 
@@ -441,13 +400,13 @@ Per i metodi SCAD e MCP, poichè "ncvreg" presenta dei problemi computazionali d
 
 
 ```{r, eval = bool_execute_heavy_chunks}
-models_summary$lasso <- Lasso_CV(month.yesint.cv.k4.sets,
+models_summary$lasso <- Lasso_CV(month.cv.k4.sets,
                                         my.lambda.vals = exp(seq(-20, 2, 0.1)) %>% sort(decreasing = T))
 ```
 
 
 ```{r, warning = FALSE, eval = bool_execute_heavy_chunks}
-models_summary$scad = NonConvex_Cv(cv.sets = month.yesint.cv.k4.sets,
+models_summary$scad = NonConvex_Cv(cv.sets = month.cv.k4.sets,
                                              my.lambda.vals = exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE),
                                              my.gamma.vals = seq(2+1e-05, 10, length = 10),
                                          my.penalty = "scad")
@@ -459,7 +418,7 @@ save(models_summary, file = file_save_name)
 
 
 ```{r, warning = FALSE, eval = bool_execute_heavy_chunks}
-models_summary$mcp = NonConvex_Cv(cv.sets = month.yesint.cv.k4.sets,
+models_summary$mcp = NonConvex_Cv(cv.sets = month.cv.k4.sets,
                                              my.lambda.vals = exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE),
                                              my.gamma.vals = seq(1+1e-05, 10, length = 10),
                                          my.penalty = "mcp")
@@ -470,7 +429,7 @@ save(models_summary, file = file_save_name)
 
 ```{r, eval = bool_execute_heavy_chunks}
 
-models_summary$elasticnet = Elastic_Cv(cv.sets = month.yesint.cv.k4.sets,
+models_summary$elasticnet = Elastic_Cv(cv.sets = month.cv.k4.sets,
                                              my.lambda.vals = exp(seq(-20, 2, 0.3)) %>% sort(decreasing = TRUE),
                                              my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 10))
 
@@ -487,7 +446,7 @@ glmnet.control(mxitnr = 50) # increase maximum no. of IRLS iterations allowed
 
 
 ```{r, eval = bool_execute_heavy_chunks, warning=FALSE}
-models_summary$lasso.poi = Lasso_Offset_CV(cv.sets = month.yesint.cv.k4.sets,
+models_summary$lasso.poi = Lasso_Offset_CV(cv.sets = month.cv.k4.sets,
                                           my.lambda.vals = exp(seq(-15, 3, 0.1)) %>% sort(decreasing = TRUE),
                                           my.family = poisson())
 
@@ -506,7 +465,7 @@ save(models_summary, file = file_save_name)
 
 
 ```{r, warning=FALSE, eval = bool_execute_heavy_chunks}
-models_summary$elasticnet.poi = Elastic_Offset_Cv(cv.sets = month.yesint.cv.k4.sets,
+models_summary$elasticnet.poi = Elastic_Offset_Cv(cv.sets = month.cv.k4.sets,
                                                         my.lambda.vals = exp(seq(-10, 2, 0.2)) %>% sort(decreasing = TRUE),
                                                         my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 10),
                                                         my.family = poisson())
@@ -650,7 +609,7 @@ save(models_summary, file = file_save_name)
 ```
 
 ```{r, warning=FALSE, eval = bool_execute_heavy_chunks}
-# models_summary$lasso.negbin = LASSO_NegBin_Offset_Cv(cv.sets = month.yesint.cv.k4.sets,
+# models_summary$lasso.negbin = LASSO_NegBin_Offset_Cv(cv.sets = month.cv.k4.sets,
 #                                                         my.lambda.vals = exp(seq(-10, 2, 0.2)) %>% sort(decreasing = TRUE),
 #                                                         my.theta.vals = seq(1e-5, 20, length = 20))
 ```

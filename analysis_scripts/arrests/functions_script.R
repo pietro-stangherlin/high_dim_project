@@ -10,6 +10,7 @@ library(gglasso)
 library(viridis)
 
 # Preprocessing -------------------------------------------------
+
 # Groub by months indexes
 GroupByMONTHSets = function(mydf, month_indexes){
   month_grouped = mydf %>%
@@ -30,9 +31,36 @@ GroupByYEARSets = function(mydf, year_indexes){
   
   return(year_grouped)
 }
+
+
+# Function to subsample observations based on a threshold
+Subsample_Below_Threshold <- function(df, threshold) {
+  # Count the frequency of observations with counts equal to the threshold
+  threshold_frequency <- sum(df$count == threshold)
+  
+  sub_values = unique(df$count[df$count < threshold])
+  
+  # keep all counts above the threshold
+  df_above_threshold <- df[df$count >= threshold, ]
+  
+  # subsample
+  for(val in sub_values){
+    
+    temp_index_pool = which(df$count == val)
+    index_temp_sample = sample(temp_index_pool,
+                               size = min(threshold_frequency, length(temp_index_pool)))
+    # add the counts observation
+    # to above threshold df
+    df_above_threshold = bind_rows(df_above_threshold, df[index_temp_sample,])
+    
+  }
+  
+  return(df_above_threshold)
+}
+
  
 # Function to create cross-validation sets
-MakeMonthCvSets <- function(my_df, month_sets_ind, formula) {
+MakeMonthCvSets <- function(my_df, month_sets_ind, formula, threshold) {
   cv.sets <- list()
   
   for (i in 1:nrow(month_sets_ind)) {
@@ -47,17 +75,21 @@ MakeMonthCvSets <- function(my_df, month_sets_ind, formula) {
     cv.sets[[i]]$train$df <- GroupByMONTHSets(mydf = my_df,
                                               month_indexes = train_month_indexes)
     
+    cv.sets[[i]]$train$df = Subsample_Below_Threshold(df = cv.sets[[i]]$train$df, threshold = threshold)
+    
     cv.sets[[i]]$train$model_matrix <- sparse.model.matrix(formula,
                                                            data = cv.sets[[i]]$train$df)
     
     cv.sets[[i]]$train$df <- data.frame(count = cv.sets[[i]]$train$df$count)
     
     # here it's the number of months considered
-    cv.sets[[i]]$train$offset.constant <- length(setdiff(1:12, ncol(month_sets_ind)))
+    cv.sets[[i]]$train$offset.constant <- length(setdiff(1:12, 1:ncol(month_sets_ind)))
     
     
     cv.sets[[i]]$test$df <- GroupByMONTHSets(mydf = my_df,
                                              month_indexes = test_month_indexes)
+    
+    cv.sets[[i]]$test$df = Subsample_Below_Threshold(df = cv.sets[[i]]$test$df, threshold = threshold)
     
     cv.sets[[i]]$test$model_matrix <- sparse.model.matrix(formula,
                                                           data = cv.sets[[i]]$test$df)
@@ -65,14 +97,15 @@ MakeMonthCvSets <- function(my_df, month_sets_ind, formula) {
     cv.sets[[i]]$test$df <- data.frame(count = cv.sets[[i]]$test$df$count)
     
     # here it's the number of months considered
-    cv.sets[[i]]$test$offset.constant <- length(ncol(month_sets_ind))
+    cv.sets[[i]]$test$offset.constant <- ncol(month_sets_ind)
     gc()
   }
   
   return(cv.sets)
 }
 
-MakeMonthCvSetsZeros <- function(my_df, zeros_df, month_sets_ind, formula) {
+
+MakeMonthCvSetsZeros <- function(my_df, zeros_df, month_sets_ind, formula, threshold) {
   cv.sets <- list()
   
   for (i in 1:nrow(month_sets_ind)) {
@@ -95,6 +128,8 @@ MakeMonthCvSetsZeros <- function(my_df, zeros_df, month_sets_ind, formula) {
     
     cv.sets[[i]]$train$df = bind_rows(cv.sets[[i]]$train$df, zeros_train)
     
+    cv.sets[[i]]$train$df = Subsample_Below_Threshold(df = cv.sets[[i]]$train$df, threshold = threshold)
+    
     # just to make the sparse matrix
     cv.sets[[i]]$train$df$temp_response = 1:nrow(cv.sets[[i]]$train$df)
     
@@ -104,13 +139,15 @@ MakeMonthCvSetsZeros <- function(my_df, zeros_df, month_sets_ind, formula) {
     cv.sets[[i]]$train$df <- data.frame(count = cv.sets[[i]]$train$df$count)
     
     # here it's the number of months considered
-    cv.sets[[i]]$train$offset.constant <- length(setdiff(1:12, ncol(month_sets_ind)))
+    cv.sets[[i]]$train$offset.constant <- length(setdiff(1:12, 1:ncol(month_sets_ind)))
     
     
     cv.sets[[i]]$test$df <- GroupByMONTHSets(mydf = my_df,
                                              month_indexes = test_month_indexes)
     
     cv.sets[[i]]$test$df = bind_rows(cv.sets[[i]]$test$df, zeros_test)
+    
+    cv.sets[[i]]$test$df = Subsample_Below_Threshold(df = cv.sets[[i]]$test$df, threshold = threshold)
     
     # just to make the sparse matrix
     cv.sets[[i]]$test$df$temp_response = 1:nrow(cv.sets[[i]]$test$df)
@@ -121,42 +158,7 @@ MakeMonthCvSetsZeros <- function(my_df, zeros_df, month_sets_ind, formula) {
     cv.sets[[i]]$test$df <- data.frame(count = cv.sets[[i]]$test$df$count)
     
     # here it's the number of months considered
-    cv.sets[[i]]$test$offset.constant <- length(ncol(month_sets_ind))
-    gc()
-  }
-  
-  return(cv.sets)
-}
-
-
-MakeYearCvSets <- function(my_df, year_sets_ind, all_years_set, formula) {
-  cv.sets <- list()
-  
-  for (i in 1:nrow(year_sets_ind)) {
-    # Make sublists
-    cv.sets[[i]] <- list(train = list(df = NA, model_matrix = NA),
-                         test = list(df = NA, model_matrix = NA))
-    
-    # Populate the sublists
-    cv.sets[[i]]$train$df <- GroupByYEARSets(mydf = my_df,
-                                             year_indexes = setdiff(all_years_set, year_sets_ind[i, ]))
-    
-    cv.sets[[i]]$train$model_matrix <- sparse.model.matrix(formula,
-                                                           data = cv.sets[[i]]$train$df)
-    
-    # here it's the number of months considered
-    cv.sets[[i]]$train$offset.constant <- length(setdiff(all_years_set, ncol(year_sets_ind)))
-
-    
-    
-    cv.sets[[i]]$test$df <- GroupByYEARSets(mydf = my_df,
-                                            year_indexes = year_sets_ind[i, ])
-    
-    cv.sets[[i]]$test$model_matrix <- sparse.model.matrix(formula,
-                                                          data = cv.sets[[i]]$test$df)
-    
-    # here it's the number of months considered
-    cv.sets[[i]]$test$offset.constant <- length(ncol(year_sets_ind))
+    cv.sets[[i]]$test$offset.constant <- ncol(month_sets_ind)
     gc()
   }
   
