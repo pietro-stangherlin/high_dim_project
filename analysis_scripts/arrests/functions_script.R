@@ -50,6 +50,8 @@ MakeMonthCvSets <- function(my_df, month_sets_ind, formula) {
     cv.sets[[i]]$train$model_matrix <- sparse.model.matrix(formula,
                                                            data = cv.sets[[i]]$train$df)
     
+    cv.sets[[i]]$train$df <- data.frame(count = cv.sets[[i]]$train$df$count)
+    
     # here it's the number of months considered
     cv.sets[[i]]$train$offset.constant <- length(setdiff(1:12, ncol(month_sets_ind)))
     
@@ -59,6 +61,8 @@ MakeMonthCvSets <- function(my_df, month_sets_ind, formula) {
     
     cv.sets[[i]]$test$model_matrix <- sparse.model.matrix(formula,
                                                           data = cv.sets[[i]]$test$df)
+    
+    cv.sets[[i]]$test$df <- data.frame(count = cv.sets[[i]]$test$df$count)
     
     # here it's the number of months considered
     cv.sets[[i]]$test$offset.constant <- length(ncol(month_sets_ind))
@@ -97,7 +101,7 @@ MakeMonthCvSetsZeros <- function(my_df, zeros_df, month_sets_ind, formula) {
     cv.sets[[i]]$train$model_matrix <- sparse.model.matrix(formula,
                                                            data = cv.sets[[i]]$train$df)
     
-    cv.sets[[i]]$train$df$temp_response = NULL
+    cv.sets[[i]]$train$df <- data.frame(count = cv.sets[[i]]$train$df$count)
     
     # here it's the number of months considered
     cv.sets[[i]]$train$offset.constant <- length(setdiff(1:12, ncol(month_sets_ind)))
@@ -114,7 +118,7 @@ MakeMonthCvSetsZeros <- function(my_df, zeros_df, month_sets_ind, formula) {
     cv.sets[[i]]$test$model_matrix <- sparse.model.matrix(formula,
                                                           data = cv.sets[[i]]$test$df)
     
-    cv.sets[[i]]$test$df$temp_response = NULL
+    cv.sets[[i]]$test$df <- data.frame(count = cv.sets[[i]]$test$df$count)
     
     # here it's the number of months considered
     cv.sets[[i]]$test$offset.constant <- length(ncol(month_sets_ind))
