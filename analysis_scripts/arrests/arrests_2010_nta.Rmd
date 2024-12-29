@@ -32,11 +32,14 @@ source("functions_script.R")
 # IMPORTANT: in order to reproduce the result set bool_execute_heavy_chunks = TRUE
 
 bool_execute_heavy_chunks = FALSE
-file_save_name = "arrests_nta_2010_models_summary.Rdata"
+file_save_name = "rdata/arrests_nta_2010_models_summary.Rdata"
 load(file_save_name)
 
-file_joined_zero_counts_2010_df = "joined_zero_counts_2010.Rdata"
+file_joined_zero_counts_2010_df = "rdata/joined_zero_counts_2010.Rdata"
 load(file_joined_zero_counts_2010_df)
+
+month.yesint.cv.k4.sets.name = "rdata/month_cv_set_name.RData"
+month.zeros.cv.k4.sets.name = "rdata/month_zeros_cv_set_name.RData"
 
 
 
@@ -391,7 +394,7 @@ df_2010_grouped.matrix = df_2010_grouped.matrix[,common_col_names]
 df_2011_grouped.matrix = df_2011_grouped.matrix[,common_col_names]
 ```
 
-```{r}
+```{r, eval = bool_execute_heavy_chunks}
 # make cv folds
 
 # NO interaction
@@ -402,16 +405,23 @@ df_2011_grouped.matrix = df_2011_grouped.matrix[,common_col_names]
 month.yesint.cv.k4.sets = suppressMessages(MakeMonthCvSets(my_df = df_2010,
                        month_sets_ind = month_sets_ind$k4,
                        formula = FORMULA.YES.INTERACTIONS))
+
+
+
+
+save(month.yesint.cv.k4.sets, file = month.yesint.cv.k4.sets.name)
 ```
 
 
-```{r}
+```{r, eval = bool_execute_heavy_chunks}
 # make cv folds adding the zero counts
 
 month.zeros.cv.k4.sets = suppressMessages(MakeMonthCvSetsZeros(my_df = df_2010,
                                               zeros_df = joined_zero_counts_2010_df,
                                               month_sets_ind = month_sets_ind$k4,
                        formula = FORMULA.YES.INTERACTIONS.sparse))
+
+save(month.zeros.cv.k4.sets, file = month.zeros.cv.k4.sets.name)
 ```
 
 
@@ -435,21 +445,14 @@ models_summary$lasso <- Lasso_CV(month.yesint.cv.k4.sets,
 ```
 
 
-
-```{r, eval = bool_execute_heavy_chunks}
-
-models_summary$elasticnet = Elastic_Cv(cv.sets = month.yesint.cv.k4.sets,
-                                             my.lambda.vals = exp(seq(-20, 2, 0.3)) %>% sort(decreasing = TRUE),
-                                             my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 10))
-```
-
-
-
 ```{r, warning = FALSE, eval = bool_execute_heavy_chunks}
 models_summary$scad = NonConvex_Cv(cv.sets = month.yesint.cv.k4.sets,
                                              my.lambda.vals = exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE),
                                              my.gamma.vals = seq(2+1e-05, 10, length = 10),
                                          my.penalty = "scad")
+
+# backup to save key model info
+save(models_summary, file = file_save_name)
 
 ```
 
@@ -459,13 +462,21 @@ models_summary$mcp = NonConvex_Cv(cv.sets = month.yesint.cv.k4.sets,
                                              my.lambda.vals = exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE),
                                              my.gamma.vals = seq(1+1e-05, 10, length = 10),
                                          my.penalty = "mcp")
-```
 
-
-```{r}
 # backup to save key model info
 save(models_summary, file = file_save_name)
 ```
+
+```{r, eval = bool_execute_heavy_chunks}
+
+models_summary$elasticnet = Elastic_Cv(cv.sets = month.yesint.cv.k4.sets,
+                                             my.lambda.vals = exp(seq(-20, 2, 0.3)) %>% sort(decreasing = TRUE),
+                                             my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 10))
+
+# backup to save key model info
+save(models_summary, file = file_save_name)
+```
+
 
 
 ```{r}
@@ -478,15 +489,16 @@ glmnet.control(mxitnr = 50) # increase maximum no. of IRLS iterations allowed
 models_summary$lasso.poi = Lasso_Offset_CV(cv.sets = month.yesint.cv.k4.sets,
                                           my.lambda.vals = exp(seq(-15, 3, 0.1)) %>% sort(decreasing = TRUE),
                                           my.family = poisson())
+
+# backup to save key model info
+save(models_summary, file = file_save_name)
 ```
 
 ```{r, eval = bool_execute_heavy_chunks, warning=FALSE}
 models_summary$lasso.zeros.noint = Lasso_Offset_CV(cv.sets = month.zeros.cv.k4.sets,
                                           my.lambda.vals = exp(seq(-15, 3, 0.1)) %>% sort(decreasing = TRUE),
                                           my.family = poisson())
-```
 
-```{r}
 # backup to save key model info
 save(models_summary, file = file_save_name)
 ```
@@ -497,8 +509,16 @@ models_summary$elasticnet.poi = Elastic_Offset_Cv(cv.sets = month.yesint.cv.k4.s
                                                         my.lambda.vals = exp(seq(-10, 2, 0.2)) %>% sort(decreasing = TRUE),
                                                         my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 10),
                                                         my.family = poisson())
+
+save(models_summary, file = file_save_name)
 ```
 
+
+
+```{r}
+# backup to save key model info
+save(models_summary, file = file_save_name)
+```
 
 
 ```{r, warning=FALSE, eval = bool_execute_heavy_chunks}
@@ -506,6 +526,12 @@ models_summary$elasticnet.poi.zeros = Elastic_Offset_Cv(cv.sets = month.zeros.cv
                                                         my.lambda.vals = exp(seq(-10, 2, 0.2)) %>% sort(decreasing = TRUE),
                                                         my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 20),
                                                         my.family = poisson())
+```
+
+
+```{r}
+# backup to save key model info
+save(models_summary, file = file_save_name)
 ```
 
 Sia per il modello normale che per quello Poisson il $\lambda$ minimo è molto vicino a zero (poichè la soluzione è sul bordo si dovrebbe provare a diminuire ulteriormente $\lambda$, ma già così i coefficienti sono quasi uguali alle stime non penalizzate).
