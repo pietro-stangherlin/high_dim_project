@@ -41,7 +41,8 @@ load(file_joined_zero_counts_2010_df)
 month.yesint.cv.k4.sets.name = "rdata/month_cv_set_name.RData"
 month.zeros.cv.k4.sets.name = "rdata/month_zeros_cv_set_name.RData"
 
-
+load(month.yesint.cv.k4.sets.name)
+load(month.zeros.cv.k4.sets.name)
 
 # best models fitted on all data
 # estimated_best_models = TRUE
