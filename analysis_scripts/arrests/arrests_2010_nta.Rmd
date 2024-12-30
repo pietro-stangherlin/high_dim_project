@@ -526,13 +526,7 @@ PlotOneDim(x = log(models_summary$lasso.poi$lambda),
 ```
 
 
-Elasticnet individua in entrambi i casi un $\alpha$ prossimo a zero (ridge, possibilmente data la forte correlazione tra covariate nella costruzione della matrice del modello), nel modello normale presenta una soluzione molto vicina alle stime non penalizzate ($\lambda$ è prossimo a zero), mentre nel modello Poisson il $\lambda$ selezionato è 
-
-```{r}
-models_summary$elasticnet.poi$lmin
-```
-
-
+Per il modello continuo Elasticnet individua un $\alpha$ intermedio tra Ridge e LASSO, ma come sopra il $\lambda$ è prossimo a zero (considerazioni uguali a sopra), nel modello Poisson invece è selezionata una Ridge con $\lambda$ non prossimo a zero.
 
 ```{r, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT}
 par(mfrow = c(1,2))
@@ -560,6 +554,8 @@ TwoParErrPlot(model_list = models_summary$elasticnet.poi,
 par(mfrow = c(1,1))
 ```
 
+
+Sia per SCAD che per MCP il $\lambda$ selezionato è prossimo a zero, provando ad aumentare ulteriormente $\gamma$ la soluzione sostanzialmente non cambia.
 ```{r, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT}
 
 par(mfrow = c(1,2))
@@ -587,6 +583,8 @@ TwoParErrPlot(model_list = models_summary$scad,
 par(mfrow = c(1,1))
 ```
 
+
+Per i modelli di Poisson adattati con conteggi nulli il $\lambda$ ottimi non tendono al metodo non penalizzato; nel caso di Elasticnet è selezionata una ridge.
 ```{r, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT}
 par(mfrow = c(1,2))
 
@@ -923,7 +921,9 @@ legend("bottomright",
 ```
 
 
-La tabella sottostante contiene per ciascun modello il rapporto tra il numero di elementi non nulli e il numero di elementi totali del vettore dei coefficienti: il modello Poisson con penalizzazione LASSO (criterio a un errore standard) e impiegando gli zeri è quello con il rapporto minore, questo modello è dunque l'oggetto delle successive analisi.
+La tabella sottostante contiene per ciascun modello il rapporto tra il numero di elementi non nulli e il numero di elementi totali del vettore dei coefficienti: il modello Poisson con penalizzazione LASSO (criterio a un errore standard) e impiegando gli zeri è quello con il rapporto minore, questo modello è dunque l'oggetto delle successive analisi. Si ricorda che per GLM di Poisson con legame canonico, in assenza di interazioni, l'aumento unitario di una variabile fissate tutte le altre induce una modifica moltiplicativa nel parametro della media pari all'esponenziale del coefficiente associato alla variabile. Nel caso considerato il parametro è il numero di arresti medi mensili (poichè si è introdotto l'offset). Sono presenti delle ulteriori difficoltà interpretative dei coefficienti dovuti alla standardizzazione delle variabili e al sottocampionamento che di fatto sottostima il numero di conteggi nulli o bassi. In questa analisi si è inoltre più interessati alle variabili associate a un incremento degli arresti più che a una loro diminuizione.
+
+
 ```{r}
 
 SparsityRatio = function(vec){
@@ -999,10 +999,12 @@ map_with_viridis <- ggplot(data = geo_data) +
 
 # Add NTA names directly on the regions
 map_with_viridis <- map_with_viridis +
-  geom_sf_text(data = filtered_data, aes(label = NTA2020), size = 2, color = "red")
+  geom_sf_text(data = filtered_data, aes(label = NTA2020), size = 3, color = "white")
 
 print(map_with_viridis)
 ```
+Si riportano anche le tabelle dei cofficienti per le variabili qualitative (marginali).
+
 ```{r}
 # Select column names containing only non interaction
 LAW_CAT_CD_indexes = grep("LAW_CAT_CD(?!.*NTA2020)", beta_names, perl = TRUE)
@@ -1010,15 +1012,15 @@ LAW_CAT_CD_betas = data.frame(LAW_CAT_CD = sub("LAW_CAT_CD", "", beta_names[LAW_
                               beta = models_summary$lasso.poi.zeros$beta[LAW_CAT_CD_indexes])
 
 KY_CD_indexes = grep("KY_CD(?!.*NTA2020)", beta_names, perl = TRUE)
-KY_CD_betas = data.frame(LAW_CAT_CD = sub("KY_CD", "", beta_names[KY_CD_indexes]),
+KY_CD_betas = data.frame(KY_CD = sub("KY_CD", "", beta_names[KY_CD_indexes]),
                               beta = models_summary$lasso.poi.zeros$beta[KY_CD_indexes])
 
 PERP_SEX_indexes = grep("PERP_SEX(?!.*NTA2020)", beta_names, perl = TRUE)
-PERP_SEX_betas = data.frame(LAW_CAT_CD = sub("PERP_SEX", "", beta_names[PERP_SEX_indexes]),
+PERP_SEX_betas = data.frame(PERP_SEX = sub("PERP_SEX", "", beta_names[PERP_SEX_indexes]),
                               beta = models_summary$lasso.poi.zeros$beta[PERP_SEX_indexes])
 
 PERP_RACE_indexes = grep("PERP_RACE(?!.*NTA2020)", beta_names, perl = TRUE)
-PERP_RACE_betas = data.frame(LAW_CAT_CD = sub("PERP_RACE", "", beta_names[PERP_RACE_indexes]),
+PERP_RACE_betas = data.frame(PERP_RACE = sub("PERP_RACE", "", beta_names[PERP_RACE_indexes]),
                               beta = models_summary$lasso.poi.zeros$beta[PERP_RACE_indexes])
 
 AGE_GROUP_indexes = grep("AGE_GROUP(?!.*NTA2020)", beta_names, perl = TRUE)
@@ -1026,14 +1028,52 @@ AGE_GROUP_betas = data.frame(AGE_GROUP = sub("AGE_GROUP", "", beta_names[AGE_GRO
                               beta = models_summary$lasso.poi.zeros$beta[AGE_GROUP_indexes])
 
 # also find the numerics
+census_cols <- c("Pop1", "MdAge", "MaleP", "Hsp1P", "BNHP", "OthNHP", "WNHP", "ANHP", "MIncome")
 
+census_betas = data.frame(var = census_cols,
+                          beta = models_summary$lasso.poi.zeros$beta[match(census_cols, beta_names)])
 ```
 
 
-Si riportano anche le tabelle dei cofficienti per le variabili qualitative (marginali).
+Tutti i gruppi di età presentao coefficienti positivi ad eccezione della fascia più anziana.
+```{r}
+AGE_GROUP_betas
+```
+
+La percentuale di maschi è associata ad un coefficiente positivo.
+```{r}
+PERP_SEX_betas
+```
+
+I coefficienti positivi sono relativi a razza bianca, ispanica e nera.
+```{r}
+PERP_RACE_betas
+```
+
+
+I coefficienti relativi alle variabili del censo sono relativamente piccoli rispetto a quelli per le altre variabili.
+```{r}
+census_betas
+```
+
+
+Per le macro categorie di reato solo l'omicidio presenta una coefficiente positivo.
+```{r}
+LAW_CAT_CD_betas
+```
+
+Si riporta il grafico dei coefficienti per le categorie più granulari.
+```{r}
+dotchart(KY_CD_betas$beta[order(KY_CD_betas$beta)],
+         labels = KY_CD_betas$KY_CD[order(KY_CD_betas$beta)],
+         cex = 0.7, pch = 16, main = "KY_CD beta")
+```
+
 
 Poichè si è più interessati ai termini correlati positivamente con il numero di arresti si riportano di seguito i 20 coefficienti più grandi del modello Poisson più sparso descritto sopra.
 
+
+Il termine più grande e gli altri due che coinvolgono l'interazioe tra NTA e la fascia d'età massima compensano il valore negativo del coefficiente marginale per quella fascia d'età per quelle specifiche zone; un ragionamento analogo vale per i termini di interazione che comprendono la modalità "razza asiatica".
 
 ```{r}
 models_summary$lasso.poi.zeros$beta_big_1se = PlotFirstCoefs(coef_vec = models_summary$lasso.poi.zeros$beta1se,
