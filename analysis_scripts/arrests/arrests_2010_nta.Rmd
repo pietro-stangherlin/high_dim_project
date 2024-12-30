@@ -475,16 +475,10 @@ save(models_summary, file = file_save_name)
 
 
 
-```{r}
-# backup to save key model info
-save(models_summary, file = file_save_name)
-```
-
-
 ```{r, warning=FALSE, eval = bool_execute_heavy_chunks}
 models_summary$elasticnet.poi.zeros = Elastic_Offset_Cv(cv.sets = month.zeros.cv.k4.sets,
                                                         my.lambda.vals = exp(seq(-10, 2, 0.2)) %>% sort(decreasing = TRUE),
-                                                        my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 20),
+                                                        my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 10),
                                                         my.family = poisson())
 ```
 
