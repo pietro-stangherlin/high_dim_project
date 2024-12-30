@@ -14,14 +14,16 @@ knitr::opts_chunk$set(fig.align = 'center')
 rm(list = ls())
 gc(verbose = FALSE)
 library(gridExtra)
+library(sf)
+library(ggplot2)
 
 # plotting parameters 1d plot
 OUT.WIDTH.1d = "100%"
 OUT.HEIGHT.1d = "100%"
 
 # plotting parameters 2d plots
-OUT.WIDTH = "60%"
-OUT.HEIGHT = "70%"
+OUT.WIDTH = "45%"
+OUT.HEIGHT = "60%"
 
 source("functions_script.R")
 ```
@@ -170,6 +172,8 @@ Il sottocampionamento è effettuato anche per i dataset completi relativi a 2010
 
 ```{r, eval = bool_execute_heavy_chunks, results='hide'}
 
+set.seed(123)
+
 # make a zero count dataframe for each unseen combination of variable values in the original data.
 library(hash)
 
@@ -235,6 +239,10 @@ joined_zero_counts_2010_df$count <- 0
 
 joined_zero_counts_2010_df = joined_zero_counts_2010_df %>% mutate(across(where(is.character), as.factor))
 
+# strat_cols <- c("KY_CD", "AGE_GROUP", "PERP_RACE", "PERP_SEX", "LAW_CAT_CD", "MONTH")
+# exclude_cols <- c("Pop1", "MdAge", "MaleP", "Hsp1P", "BNHP", "OthNHP", "WNHP", "ANHP", "MIncome")
+
+
 
 save(joined_zero_counts_2010_df, file = file_joined_zero_counts_2010_df)
 
@@ -262,7 +270,7 @@ var_unique_len = apply(df_2010_grouped_subsampled,
                        function(col) length(unique(col)))
 ```
 
-Senza considerare interazioni tra KY_CD (esplicativa non spaziale di arrest con più modalità) con gli NTA il rapporto è:
+Senza considerare interazioni tra KY_CD (esplicativa non spaziale di arrest con più modalità) con gli NTA il rapporto è (considerando i dati 2011 :
 ```{r, include = TRUE}
 nrow(df_2010_grouped_subsampled) / (var_unique_len["NTA2020"] *
   sum(var_unique_len[c("LAW_CAT_CD", "AGE_GROUP", "PERP_SEX", "PERP_RACE")]))
@@ -343,7 +351,7 @@ gc()
 ```
 
 
-Poichè la matrice del modello dell'insieme di verifica e quella dell'insieme di stima non condividono tutte le colonne si sceglie di ridurre le colonne di entrambe con l'intersezione  delle colonne in comune.
+Poichè la matrice del modello dell'insieme di verifica e quella dell'insieme di stima non condividono tutte le colonne si considerare solo le colonne in comune alle due.
 ```{r}
 
 
@@ -490,7 +498,7 @@ save(models_summary, file = file_save_name)
 
 
 Per il modello normale il $\lambda$ minimo è molto vicino a zero (poichè la soluzione è sul bordo si dovrebbe provare a diminuire ulteriormente $\lambda$, ma già così i coefficienti sono quasi uguali alle stime non penalizzate).
-Per il modello Poisson 
+Per il modello Poisson.
 ```{r, fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d}
 par(mfrow = c(1,2))
 
@@ -552,8 +560,6 @@ TwoParErrPlot(model_list = models_summary$elasticnet.poi,
 par(mfrow = c(1,1))
 ```
 
-
-
 ```{r, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT}
 
 par(mfrow = c(1,2))
@@ -581,7 +587,32 @@ TwoParErrPlot(model_list = models_summary$scad,
 par(mfrow = c(1,1))
 ```
 
+```{r, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT}
+par(mfrow = c(1,2))
 
+PlotOneDim(x = log(models_summary$lasso.poi.zeros$lambda),
+           y = models_summary$lasso.poi.zeros$cv.err.matr$cv.err,
+           se = models_summary$lasso.poi.zeros$cv.err.matr$cv.se,
+           x.min = log(models_summary$lasso$lmin),
+           x.1se = log(models_summary$lasso$l1se),
+           xlab = "log lambda",
+           ylab = "CV error",
+           main = "LASSO Poi zeros  CV error",
+          min.leg = "lambda min",
+           onese.leg = "lambda 1se")
+
+TwoParErrPlot(model_list = models_summary$elasticnet.poi.zeros,
+              row_par_name = "lambda",
+              col_par_name = "alpha",
+              cv_err_matr_name = "cv.err.matr",
+              row_par_min_name = "lmin",
+              col_par_min_name = "amin",
+              my.main = "Elasticnet Poisson zeros  Cv error contour",
+              my.xlab = "log lambda",
+              my.ylab = "alpha")
+
+
+```
 
 
 
@@ -591,54 +622,7 @@ save(models_summary, file = file_save_name)
 ```
 
 
-
-
-```{r, warning=FALSE, eval = bool_execute_heavy_chunks}
-### Neg bin Lasso
-
-# Using a hierarchical specification we assume $Y_i \sim P(\mu_i \lambda_i)$ and $\lambda_i \sim Ga(\tau, \tau)$ so marginally the $Y_i$ are negative binomials with variance $\mu_i(1 + \tau \mu_i)$.
-# In the R parameterization adopted $\theta = 1/\tau$ which becomes another tuning parameter.
-
-# models_summary$lasso.negbin.noint = LASSO_NegBin_Offset_Cv(cv.sets = month.noint.cv.k4.sets,
-#                                                         my.lambda.vals = exp(seq(-3, 5, 0.2)) %>% sort(decreasing = TRUE),
-#                                                         my.theta.vals = seq(1e-5, 3, length = 20))
-```
-
-```{r, warning=FALSE, eval = bool_execute_heavy_chunks}
-# models_summary$lasso.negbin = LASSO_NegBin_Offset_Cv(cv.sets = month.cv.k4.sets,
-#                                                         my.lambda.vals = exp(seq(-10, 2, 0.2)) %>% sort(decreasing = TRUE),
-#                                                         my.theta.vals = seq(1e-5, 20, length = 20))
-
-# backup to save key model info
-# save(models_summary, file = file_save_name)
-```
-
-```{r, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT}
-par(mfrow = c(1,1))
-# 
-# TwoParErrPlot(model_list = models_summary$lasso.negbin.noint,
-#               row_par_name = "lambda",
-#               col_par_name = "theta",
-#               cv_err_matr_name = "cv.err.matr",
-#               row_par_min_name = "lmin",
-#               col_par_min_name = "tmin",
-#               my.main = "LASSO Negative Binomial no interaction Cv error contour",
-#               my.xlab = "log lambda",
-#               my.ylab = "theta")
-
-# TwoParErrPlot(model_list = models_summary$lasso.negbin,
-#               row_par_name = "lambda",
-#               col_par_name = "theta",
-#               cv_err_matr_name = "cv.err.matr",
-#               row_par_min_name = "lmin",
-#               col_par_min_name = "tmin",
-#               my.main = "LASSO Negative Binomial  Cv error contour",
-#               my.xlab = "log lambda",
-#               my.ylab = "theta")
-
-par(mfrow = c(1,1))
-```
-
+Per confontare modelli per risposta continua e discreta nelle previsioni sui dati 2011 si approssimano le previsioni continue al primo intero
 
 ```{r, results='hide' ,eval = bool_execute_heavy_chunks, warning=FALSE}
 
@@ -649,7 +633,7 @@ temp.fit = glmnet(x = df_2010_grouped_subsampled.matrix,
 
 models_summary$lasso$beta = temp.fit$beta
 models_summary$lasso$test_error = RMSEfun(df_2011_grouped_subsampled$count, 
-                                          exp(predict(temp.fit, newx = df_2011_grouped_subsampled.matrix) + log(12)))
+                                          round(exp(predict(temp.fit, newx = df_2011_grouped_subsampled.matrix) + log(12))))
 
 temp.fit = glmnet(x = df_2010_grouped_subsampled.matrix,
                   y = log(df_2010_grouped_subsampled$count) -log(12),
@@ -657,7 +641,7 @@ temp.fit = glmnet(x = df_2010_grouped_subsampled.matrix,
 
 models_summary$lasso$beta1se = temp.fit$beta
 models_summary$lasso$test_error1se = RMSEfun(df_2011_grouped_subsampled$count, 
-                                          exp(predict(temp.fit, newx = df_2011_grouped_subsampled.matrix) + log(12)))
+                                          round(exp(predict(temp.fit, newx = df_2011_grouped_subsampled.matrix) + log(12))))
 
 # Elasticnet ---------------------
 temp.fit = glmnet(x = df_2010_grouped_subsampled.matrix,
@@ -667,7 +651,7 @@ temp.fit = glmnet(x = df_2010_grouped_subsampled.matrix,
 
 models_summary$elasticnet$beta = temp.fit$beta
 models_summary$elasticnet$test_error = RMSEfun(df_2011_grouped_subsampled$count, 
-                                          exp(predict(temp.fit, newx = df_2011_grouped_subsampled.matrix) + log(12)))
+                                          round(exp(predict(temp.fit, newx = df_2011_grouped_subsampled.matrix) + log(12))))
 
 
 # SCAD ---------------------
@@ -681,9 +665,9 @@ temp.lind = which(models_summary$scad$lambda == models_summary$scad$lmin)
 
 models_summary$scad$beta = temp.fit$beta
 models_summary$scad$test_error = RMSEfun(df_2011_grouped_subsampled$count, 
-                                          exp(my.predict.gaussian(temp.fit, newdata = df_2011_grouped_subsampled.matrix,
+                                          round(exp(my.predict.gaussian(temp.fit, newdata = df_2011_grouped_subsampled.matrix,
                                                                lambda.idx = 1) +
-                                                log(12)))
+                                                log(12))))
 
 # MCP ----------------------
 temp.fit = picasso(X = df_2010_grouped_subsampled.matrix,
@@ -696,9 +680,9 @@ temp.lind = which(models_summary$mcp$lambda == models_summary$mcp$lmin)
 
 models_summary$mcp$beta = temp.fit$beta
 models_summary$mcp$test_error = RMSEfun(df_2011_grouped_subsampled$count, 
-                                          exp(my.predict.gaussian(temp.fit, newdata = df_2011_grouped_subsampled.matrix,
+                                          round(exp(my.predict.gaussian(temp.fit, newdata = df_2011_grouped_subsampled.matrix,
                                                                lambda.idx = 1) +
-                                                log(12)))
+                                                log(12))))
 
 
 # LASSO Poisson ---------------------
@@ -728,13 +712,41 @@ models_summary$lasso.poi$test_error1se = RMSEfun(df_2011_grouped_subsampled$coun
                                                   newoffset = rep(log(12), nrow(df_2011_grouped_subsampled.matrix),
                                                   type = "response")))
 
+# LASSO poisson zeros
+temp.fit = glmnet(x = df_2010_grouped_subsampled.matrix,
+                  y = df_2010_grouped_subsampled$count,
+                  offset = rep(log(12), nrow(df_2010_grouped_subsampled.matrix)),
+                  lambda = models_summary$lasso.poi.zeros$lmin,
+                  family = poisson())
+
+models_summary$lasso.poi.zeros$beta = temp.fit$beta
+models_summary$lasso.poi.zeros$test_error = RMSEfun(df_2011_grouped_subsampled$count, 
+                                          predict(temp.fit,
+                                                  newx = df_2011_grouped_subsampled.matrix,
+                                                  newoffset = rep(log(12), nrow(df_2011_grouped_subsampled.matrix)),
+                                                  type = "response"))
+
+
+temp.fit = glmnet(x = df_2010_grouped_subsampled.matrix,
+                  y = df_2010_grouped_subsampled$count,
+                  offset = rep(log(12), nrow(df_2010_grouped_subsampled.matrix)),
+                  lambda = models_summary$lasso.poi.zeros$l1se,
+                  family = poisson())
+
+models_summary$lasso.poi.zeros$beta1se = temp.fit$beta
+models_summary$lasso.poi.zeros$test_error_1se = RMSEfun(df_2011_grouped_subsampled$count, 
+                                          predict(temp.fit,
+                                                  newx = df_2011_grouped_subsampled.matrix,
+                                                  newoffset = rep(log(12), nrow(df_2011_grouped_subsampled.matrix)),
+                                                  type = "response"))
+
 
 # Elasticnet Poisson ---------------------
 temp.fit = glmnet(x = df_2010_grouped_subsampled.matrix,
                   y = df_2010_grouped_subsampled$count,
                   offset = rep(log(12), nrow(df_2010_grouped_subsampled.matrix)),
                   alpha = models_summary$elasticnet.poi$amin,
-                  lambda = models_summary$lasso.poi$lmin,
+                  lambda = models_summary$elasticnet.poi$lmin,
                   family = poisson())
 
 models_summary$elasticnet.poi$beta = temp.fit$beta
@@ -744,49 +756,71 @@ models_summary$elasticnet.poi$test_error = RMSEfun(df_2011_grouped_subsampled$co
                                                   newoffset = rep(log(12), nrow(df_2011_grouped_subsampled.matrix),
                                                   type = "response")))
 
-```
 
-```{r}
+# LASSO elasticnet zeros
+
+temp.fit = glmnet(x = df_2010_grouped_subsampled.matrix,
+                  y = df_2010_grouped_subsampled$count,
+                  offset = rep(log(12), nrow(df_2010_grouped_subsampled.matrix)),
+                  alpha = models_summary$elasticnet.poi.zeros$amin,
+                  lambda = models_summary$elasticnet.poi.zeros$lmin,
+                  family = poisson())
+
+models_summary$elasticnet.poi.zeros$beta = temp.fit$beta
+models_summary$elasticnet.poi.zeros$test_error = RMSEfun(df_2011_grouped_subsampled$count, 
+                                          predict(temp.fit,
+                                                  newx = df_2011_grouped_subsampled.matrix,
+                                                  newoffset = rep(log(12), nrow(df_2011_grouped_subsampled.matrix),
+                                                  type = "response")))
+
 # backup to save key model info
 save(models_summary, file = file_save_name)
+
 ```
 
 
-Benchè con la libreria impiegata non siano fornite informazione precise sulla regione delle stime si può comunque provare a valutare la stabilità graficamente.
 
 ```{r, fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d, warning=FALSE}
 
-par(mfrow = c(1,2))
-
-# SCAD ---------------------
-temp.fit = picasso(X = df_2010_grouped_subsampled.matrix,
-                  Y = log(df_2010_grouped_subsampled$count) -log(12),
-                  gamma = models_summary$scad$gmin,
-                  lambda = models_summary$scad$lambda,
-                  method = "scad")
-
-plot(log(temp.fit$lambda), t(temp.fit$beta),
-             type = "l", main = "SCAD Regularization Path", 
-    xlab = "Regularization Parameter", ylab = "Coefficient")
-abline(v = log(models_summary$scad$lmin))
-
-# MCP ----------------------
-temp.fit = picasso(X = df_2010_grouped_subsampled.matrix,
-                  Y = log(df_2010_grouped_subsampled$count) -log(12),
-                  gamma = models_summary$mcp$gmin,
-                  lambda = models_summary$mcp$lambda,
-                  method = "mcp")
-
-matplot(log(temp.fit$lambda), t(temp.fit$beta),
-        type = "l", main = "MCP Regularization Path", 
-    xlab = "Regularization Parameter", ylab = "Coefficient")
-abline(v = log(models_summary$mcp$lmin))
-
-par(mfrow = c(1,1))
+# Benchè con la libreria impiegata non siano fornite informazione precise sulla regione delle stime si può comunque provare a valutare la stabilità graficamente.
+# 
+# par(mfrow = c(1,2))
+# 
+# # SCAD ---------------------
+# temp.fit = picasso(X = df_2010_grouped_subsampled.matrix,
+#                   Y = log(df_2010_grouped_subsampled$count) -rep(log(12), nrow(df_2010_grouped_subsampled.matrix)),
+#                   gamma = models_summary$scad$gmin,
+#                   lambda = models_summary$scad$lambda,
+#                   method = "scad")
+# 
+# temp.fit = ncvreg(X = as.matrix(df_2010_grouped_subsampled.matrix),
+#                   y = log(df_2010_grouped_subsampled$count) -rep(log(12), nrow(df_2010_grouped_subsampled.matrix)),
+#                   gamma = models_summary$scad$gmin,
+#                   lambda = models_summary$scad$lambda,
+#                   penalty = "SCAD")
+# 
+# plot(log(temp.fit$lambda), t(temp.fit$beta),
+#              type = "l", main = "SCAD Regularization Path",
+#     xlab = "Regularization Parameter", ylab = "Coefficient")
+# abline(v = log(models_summary$scad$lmin))
+# 
+# # MCP ----------------------
+# temp.fit = picasso(X = df_2010_grouped_subsampled.matrix,
+#                   Y = log(df_2010_grouped_subsampled$count) -rep(log(12), nrow(df_2010_grouped_subsampled.matrix)),
+#                   gamma = models_summary$mcp$gmin,
+#                   lambda = models_summary$mcp$lambda,
+#                   method = "mcp")
+# 
+# matplot(log(temp.fit$lambda), t(temp.fit$beta),
+#         type = "l", main = "MCP Regularization Path",
+#     xlab = "Regularization Parameter", ylab = "Coefficient")
+# abline(v = log(models_summary$mcp$lmin))
+# 
+# par(mfrow = c(1,1))
 ```
 
 ```{r, results='hide'}
-rm(temp.fit)
+suppressMessages(rm(temp.fit))
 suppressMessages(gc())
 ```
 
@@ -795,7 +829,7 @@ suppressMessages(gc())
 
 ### Modelli migliori
 
-Si riportano gli errori di previsione sui dati del 2011 dei vari modelli migliori stimati sui dati completi 2010. 
+Si riportano gli errori di previsione sui dati del 2011 (senza zeri) dei vari modelli migliori stimati sui dati completi 2010 (senza zeri). La milgior previsione si ha per il modello Poisson con penalità LASSO (selezionato sui dati con gli zeri) per $\lambda$ a errore a un errore standard, mentre il peggiore è sempre il modello di Poisson ma con penalità Elasticnet.
 ```{r}
 models.errors = data.frame(model = c("lasso",
                                      "lasso.1se",
@@ -804,7 +838,10 @@ models.errors = data.frame(model = c("lasso",
                                      "mcp",
                                      "poisson_lasso",
                                      "poisson_lasso1se",
-                                     "poisson_elasticnet"),
+                                     "poisson_elasticnet",
+                                     "poisson_lasso.zeros",
+                                     "poisson_lasso.zeros.1se",
+                                     "poisson_elasticnet_zeros"),
                            test_error = c(models_summary$lasso$test_error,
                                           models_summary$lasso$test_error1se,
                                           models_summary$elasticnet$test_error,
@@ -812,13 +849,18 @@ models.errors = data.frame(model = c("lasso",
                                           models_summary$mcp$test_error,
                                           models_summary$lasso.poi$test_error,
                                           models_summary$lasso.poi$test_error1se,
-                                          models_summary$elasticnet.poi$test_error))
+                                          models_summary$elasticnet.poi$test_error,
+                                          models_summary$lasso.poi.zeros$test_error,
+                                          models_summary$lasso.poi.zeros$test_error_1se,
+                                          models_summary$elasticnet.poi.zeros$test_error))
 
 models.errors
 ```
 
 
 I grafici dei coefficienti stimati confermano, per LASSO ed Elasticnet non avviene selezione delle variabili.
+Le stime non sono sparse nemmeno con il criterio dell'errore a un errore standard.
+Anche per SCAD ed MCP non avviene selezione di variabili: le stime (non riportate) sono quasi uguali a quelle LASSO ed Elasticnet.
 ```{r,  fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d}
 
 par(mfrow = c(1,2))
@@ -848,58 +890,156 @@ legend("bottomright",
 ```
 
 
-Le stimne non sono sparse nemmeno con il criterio dell'errore a un errore standard
-```{r,  fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d}
-
-par(mfrow = c(1,2))
-plot(models_summary$lasso$beta1se, pch = 16,
-     main = "LASSO 1se",
-     xlab = "beta index", ylab = "beta")
-
-plot(models_summary$lasso.poi$beta1se, pch = 16,
-      main = "Poisson LASSO 1se",
-     xlab = "beta index", ylab = "beta")
-
+```{r}
+# plot(models_summary$scad$beta, pch = 16,
+#       main = "SCAD & MCP beta estimates",
+#      xlab = "beta index", ylab = "beta",
+#      ylim = range(c(as.vector(models_summary$scad$beta), as.vector(models_summary$mcp$beta))))
+# points(models_summary$mcp$beta, col = "red")
+# 
+# legend("bottomright",
+#        legend = c("SCAD", "MCP"),
+#        col = c(1,2),
+#        lty = 1,
+#        bty = "n")
 ```
 
 
-Anche per SCAD ed MCP non avviene selezione di variabili.
+I modelli Poisson adattati considerando gli zeri presentano una maggiore selezione di variabili rispetto ai precedenti.
+```{r,  fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d}
 
-```{r}
-plot(models_summary$scad$beta, pch = 16,
-      main = "SCAD & MCP beta estimates",
+par(mfrow = c(1,1))
+plot(models_summary$lasso.poi.zeros$beta, pch = 16,
+     main = "Poisson LASSO zeros min & 1se ",
      xlab = "beta index", ylab = "beta",
-     ylim = range(c(as.vector(models_summary$scad$beta), as.vector(models_summary$mcp$beta))))
-points(models_summary$mcp$beta, col = "red")
+     ylim = range(c(as.vector(models_summary$lasso.poi.zeros$beta),as.vector(models_summary$lasso.poi.zeros$beta1se))))
+points(models_summary$lasso.poi.zeros$beta1se, col = "red")
 
 legend("bottomright",
-       legend = c("SCAD", "MCP"),
+       legend = c("min", "1se"),
        col = c(1,2),
        lty = 1,
        bty = "n")
 ```
-Per provare ad avere qualche informazione sul fenomeno spiegato dai modelli si decide di selezionare un certo numero tra i coefficienti più grandi in valore assoluto.
 
+
+La tabella sottostante contiene per ciascun modello il rapporto tra il numero di elementi non nulli e il numero di elementi totali del vettore dei coefficienti: il modello Poisson con penalizzazione LASSO (criterio a un errore standard) e impiegando gli zeri è quello con il rapporto minore, questo modello è dunque l'oggetto delle successive analisi.
 ```{r}
-beta_names = df_2010_grouped_subsampled.matrix %>% colnames
+
+SparsityRatio = function(vec){
+  mean(vec != 0)
+}
+
+models.zero.beta = data.frame(model = c("lasso",
+                                     "lasso.1se",
+                                     "elasticnet",
+                                     "scad",
+                                     "mcp",
+                                     "poisson_lasso",
+                                     "poisson_lasso1se",
+                                     "poisson_elasticnet",
+                                     "poisson_lasso.zeros",
+                                     "poisson_lasso.zeros.1se",
+                                     "poisson_elasticnet_zeros"),
+                           not_null_ratio = c(models_summary$lasso$beta %>% SparsityRatio(),
+                                          models_summary$lasso$beta1se %>% SparsityRatio(),
+                                          models_summary$elasticnet$beta %>% SparsityRatio(),
+                                          models_summary$scad$beta %>% SparsityRatio(),
+                                          models_summary$mcp$beta %>% SparsityRatio(),
+                                          models_summary$lasso.poi$beta %>% SparsityRatio(),
+                                          models_summary$lasso.poi$beta1se %>% SparsityRatio(),
+                                          models_summary$elasticnet.poi$beta %>% SparsityRatio(),
+                                          models_summary$lasso.poi.zeros$beta %>% SparsityRatio(),
+                                          models_summary$lasso.poi.zeros$beta1se %>% SparsityRatio(),
+                                          models_summary$elasticnet.poi.zeros$beta %>% SparsityRatio()))
+
+models.zero.beta
 ```
 
 
+
+E' riportata la mappa degli NTA colorati in base al valore del corrispettivo coefficiente (marginale) (le zone grigie corrispondono a zone non presenti nei dati, e quindi coefficienti non stimati),per alcuni NTA sono presenti i nomi dei corrispettivi codici, questi sono in corrispondenza dei coefficienti più grandi relativi a termini di interazione (vedasi sotto).
+
+```{r, results='hide'}
+geo_data = st_read("../../data/coordinates_maps/nta.geojson")
+```
+
+
+```{r, warning=FALSE, message=FALSE}
+
+beta_names = colnames(df_2010_grouped_subsampled.matrix)
+
+# Filter the data for specific NTA2020 values
+
+specific_ntas <- sub(".*NTA2020([A-Z0-9]+).*", "\\1", models_summary$lasso.poi.zeros$beta_big$names)
+filtered_data <- geo_data %>% filter(NTA2020 %in% specific_ntas)
+
+# Extract coordinates from the sf object
+filtered_data_coords <- st_coordinates(filtered_data)
+
+
+nta_columns <- grep("^NTA2020", beta_names)
+
+
+
+nta_beta_matrix = data.frame(NTA2020 = sub("NTA2020", "",beta_names[nta_columns]),
+                        beta = models_summary$lasso.poi.zeros$beta[nta_columns])
+
+# Merge the geo_data with nta_values
+geo_data <- merge(geo_data, nta_beta_matrix, by.x = "NTA2020", by.y = "NTA2020", all.x = TRUE)
+
+```
+
+```{r, warning=FALSE}
+# Create the map plot with the viridis palette
+map_with_viridis <- ggplot(data = geo_data) +
+  geom_sf(aes(fill = beta)) +
+  scale_fill_viridis(option = "viridis", name = "Values", na.value = "grey50") +
+  labs(title = "NTA Poisson LASSO 1se zeros beta")
+
+# Add NTA names directly on the regions
+map_with_viridis <- map_with_viridis +
+  geom_sf_text(data = filtered_data, aes(label = NTA2020), size = 2, color = "red")
+
+print(map_with_viridis)
+```
 ```{r}
-PlotFirstCoefsAbs(coef_vec = models_summary$elasticnet$beta,
-                  coef_names = beta_names,
-                  first_n = 20,
-                  my.main = "Elasticnet biggest abs beta")
+# Select column names containing only non interaction
+LAW_CAT_CD_indexes = grep("LAW_CAT_CD(?!.*NTA2020)", beta_names, perl = TRUE)
+LAW_CAT_CD_betas = data.frame(LAW_CAT_CD = sub("LAW_CAT_CD", "", beta_names[LAW_CAT_CD_indexes]),
+                              beta = models_summary$lasso.poi.zeros$beta[LAW_CAT_CD_indexes])
 
-PlotFirstCoefsAbs(coef_vec = models_summary$scad$beta,
-                  coef_names = beta_names,
-                  first_n = 20,
-                  my.main = "SCAD biggest abs beta")
+KY_CD_indexes = grep("KY_CD(?!.*NTA2020)", beta_names, perl = TRUE)
+KY_CD_betas = data.frame(LAW_CAT_CD = sub("KY_CD", "", beta_names[KY_CD_indexes]),
+                              beta = models_summary$lasso.poi.zeros$beta[KY_CD_indexes])
 
-PlotFirstCoefsAbs(coef_vec = models_summary$elasticnet.poi$beta,
+PERP_SEX_indexes = grep("PERP_SEX(?!.*NTA2020)", beta_names, perl = TRUE)
+PERP_SEX_betas = data.frame(LAW_CAT_CD = sub("PERP_SEX", "", beta_names[PERP_SEX_indexes]),
+                              beta = models_summary$lasso.poi.zeros$beta[PERP_SEX_indexes])
+
+PERP_RACE_indexes = grep("PERP_RACE(?!.*NTA2020)", beta_names, perl = TRUE)
+PERP_RACE_betas = data.frame(LAW_CAT_CD = sub("PERP_RACE", "", beta_names[PERP_RACE_indexes]),
+                              beta = models_summary$lasso.poi.zeros$beta[PERP_RACE_indexes])
+
+AGE_GROUP_indexes = grep("AGE_GROUP(?!.*NTA2020)", beta_names, perl = TRUE)
+AGE_GROUP_betas = data.frame(AGE_GROUP = sub("AGE_GROUP", "", beta_names[AGE_GROUP_indexes]),
+                              beta = models_summary$lasso.poi.zeros$beta[AGE_GROUP_indexes])
+
+# also find the numerics
+
+```
+
+
+Si riportano anche le tabelle dei cofficienti per le variabili qualitative (marginali).
+
+Poichè si è più interessati ai termini correlati positivamente con il numero di arresti si riportano di seguito i 20 coefficienti più grandi del modello Poisson più sparso descritto sopra.
+
+
+```{r}
+models_summary$lasso.poi.zeros$beta_big_1se = PlotFirstCoefs(coef_vec = models_summary$lasso.poi.zeros$beta1se,
                   coef_names = beta_names,
                   first_n = 20,
-                  my.main = "Elasticnet poi biggest abs beta")
+                  my.main = "LASSO Poisson zeros 1se")
 ```
 
 

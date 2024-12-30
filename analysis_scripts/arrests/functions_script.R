@@ -8,6 +8,7 @@ library(ncvreg)
 library(picasso) # sparse model matrix scad and mcp
 library(gglasso)
 library(viridis)
+library(hash)
 
 # Preprocessing -------------------------------------------------
 
@@ -57,6 +58,63 @@ Subsample_Below_Threshold <- function(df, threshold) {
   
   return(df_above_threshold)
 }
+
+
+
+
+GenerateZeroCounts <- function(df_no_strat, nta_strat_df, Z = 5000) {
+  
+  # Initialize the zero counts data frame
+  zero_counts_df <- as.data.frame(matrix(NA, nrow = Z * 12, ncol = ncol(df_no_strat)))
+  colnames(zero_counts_df) <- colnames(df_no_strat)
+  
+  # Get unique values for each column
+  unique_vals <- apply(df_no_strat, 2, unique)
+  
+  # Create a hash set to store existing combinations
+  existing_combinations <- hash()
+  
+  # Add existing combinations to the hash set
+  for (i in 1:nrow(df_no_strat)) {
+    key <- paste(df_no_strat[i, ], collapse = "_")
+    existing_combinations[[key]] <- TRUE
+  }
+  
+  # Generate zero counts for each month
+  for (month in 1:12) {
+    for (i in 1:Z) {
+      cond <- TRUE
+      
+      while (cond) {
+        proposal <- sapply(unique_vals, function(el) sample(el, 1))
+        proposal["MONTH"] <- factor(month, levels = 1:12)
+        key <- paste(proposal, collapse = "_")
+        
+        if (!has.key(key, existing_combinations)) {
+          zero_counts_df[(month - 1) * Z + i, ] <- proposal
+          existing_combinations[[key]] <- TRUE
+          cond <- FALSE
+        }
+      }
+    }
+  }
+  
+  # Join with NTA stratification info
+  joined_zero_counts_df <- left_join(zero_counts_df, nta_strat_df, by = "NTA2020")
+  
+  # Clean up
+  rm(df_no_strat)
+  rm(zero_counts_df)
+  gc()
+  
+  # Add count column
+  joined_zero_counts_df$count <- 0
+  
+  joined_zero_counts_df <- joined_zero_counts_df %>% mutate(across(where(is.character), as.factor))
+  
+  return(joined_zero_counts_df)
+}
+
 
  
 # Function to create cross-validation sets
@@ -712,16 +770,18 @@ ExtractBestPars <- function(sublist) {
 
 # Plot --------------------------------
 # plot the first_n coef with biggest abs
-PlotFirstCoefsAbs = function(coef_vec, coef_names,
+PlotFirstCoefs = function(coef_vec, coef_names,
                           first_n,
                           my.main){
-  indexes <- order(abs(coef_vec), decreasing = TRUE)[1:first_n]
+  indexes <- order(coef_vec, decreasing = TRUE)[1:first_n]
   
   temp_df = data.frame(beta = coef_vec[indexes], names = coef_names[indexes])
   temp_df <- temp_df[order(temp_df$beta), ]
   
   dotchart(temp_df$beta, labels = temp_df$names, pch = 16,
            main = my.main)
+  
+  return(temp_df)
 }
 
 
