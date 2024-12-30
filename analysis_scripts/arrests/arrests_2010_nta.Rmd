@@ -133,19 +133,26 @@ Per quanto concerne gli intervalli temporali si è scelto di ignorare i possibil
 
 ```{r, fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d}
 
-year_grouped = suppressMessages(df_2010 %>%
-  dplyr::select(-"MONTH") %>% 
+df_2010_grouped = suppressMessages(df_2010 %>%
+  dplyr::select(-MONTH) %>% 
   group_by_all() %>% 
   summarise(count = n()))
 
-year_grouped$count %>%
+df_2011_grouped = suppressMessages(df_2011 %>%
+  group_by_all() %>% 
+  summarise(count = n()))
+
+```
+
+```{r}
+df_2010_grouped$count %>%
   table %>% 
   barplot(main = "Arrests count 2010 (grouping by covariates)",
        xlab = "number of arrests",
        ylab = "absolute frequency")
-
-par(mfrow = c(1,1))
 ```
+
+
 Questa "sovradispersione" di 1 è ragionevole data la costruzione dei conteggi per aggregazione di osservazioni con le stesse combinazioni di covariate; si dovrebbero inoltre aggiungere osservazioni con conteggi nulli per ogni combinazione di variabili per cui non si sono osservati arresti.
 
 Mantenere tutti i conteggi unitari rende computazionalmente molto oneroso l'addattamenteo dei modelli e può creare problemi nella selezione degli stessi 
@@ -240,25 +247,28 @@ E' comunque interessante provare i metodi di selezione delle variabili anche sui
 Per avere delle misure quantitative si considera il dataset in cui si sono definiti i conteggi senza considerare i mesi: si riporta il rapporto tra il numero di osservazioni (righe) e il prodotto tra il numero di modalità di NTA e la somma delle modalità delle variabili qualitative di arrests.
 
 ```{r}
-year_grouped = Subsample_Below_Threshold(df = year_grouped, threshold = 10)
+set.seed(123)
+
+df_2010_grouped_subsampled = Subsample_Below_Threshold(df = df_2010_grouped, threshold = 10)
+df_2011_grouped_subsampled = Subsample_Below_Threshold(df = df_2011_grouped, threshold = 10)
 ```
 
 
 ```{r}
-var_unique_len = apply(year_grouped,
+var_unique_len = apply(df_2010_grouped_subsampled,
                        2,
                        function(col) length(unique(col)))
 ```
 
-Senza considerare KY_CD (esplicativa non spaziale di arrest con più modalità) il rapporto è:
+Senza considerare interazioni tra KY_CD (esplicativa non spaziale di arrest con più modalità) con gli NTA il rapporto è:
 ```{r, include = TRUE}
-nrow(year_grouped) / (var_unique_len["NTA2020"] *
+nrow(df_2010_grouped_subsampled) / (var_unique_len["NTA2020"] *
   sum(var_unique_len[c("LAW_CAT_CD", "AGE_GROUP", "PERP_SEX", "PERP_RACE")]))
 ```
 
-Considerando anche KY_CD il rapporto è:
+Considerando anche interazioni tra KY_CD e NTA rapporto è:
 ```{r, include=TRUE}
-nrow(year_grouped) / (var_unique_len["NTA2020"] *
+nrow(df_2010_grouped_subsampled) / (var_unique_len["NTA2020"] *
   sum(var_unique_len[c("KY_CD", "LAW_CAT_CD", "AGE_GROUP",
                        "PERP_SEX", "PERP_RACE")]))
 ```
@@ -322,20 +332,11 @@ FORMULA.YES.INTERACTIONS.sparse = as.formula("temp_response ~. -1 - count +
 
 ```{r, warning=FALSE, results='hide'}
 
-df_2010_grouped = suppressMessages(df_2010 %>%
-  dplyr::select(-MONTH) %>% 
-  group_by_all() %>% 
-  summarise(count = n()))
+df_2010_grouped_subsampled.matrix = sparse.model.matrix(FORMULA.YES.INTERACTIONS,
+                                                df_2010_grouped_subsampled)
 
-df_2011_grouped = suppressMessages(df_2011 %>%
-  group_by_all() %>% 
-  summarise(count = n()))
-
-df_2010_grouped.matrix = sparse.model.matrix(FORMULA.YES.INTERACTIONS,
-                                                df_2010_grouped)
-
-df_2011_grouped.matrix = sparse.model.matrix(FORMULA.YES.INTERACTIONS,
-                                                df_2011_grouped)
+df_2011_grouped_subsampled.matrix = sparse.model.matrix(FORMULA.YES.INTERACTIONS,
+                                                df_2011_grouped_subsampled)
 gc()
 ```
 
@@ -345,18 +346,18 @@ Poichè la matrice del modello dell'insieme di verifica e quella dell'insieme di
 
 
 # check dimensions
-dim(df_2010_grouped.matrix)
-dim(df_2011_grouped.matrix)
+dim(df_2010_grouped_subsampled.matrix)
+dim(df_2011_grouped_subsampled.matrix)
 
-col_names_2010 = colnames(df_2010_grouped.matrix)
-col_names_2011 = colnames(df_2011_grouped.matrix)
+col_names_2010 = colnames(df_2010_grouped_subsampled.matrix)
+col_names_2011 = colnames(df_2011_grouped_subsampled.matrix)
 
 common_col_names = intersect(col_names_2010, col_names_2011)
 
 # in order to use 2011 as a test set we need to uniform the 2011 columns to 2010 colums:
 # some bias is introduced here, let's hope it's about small counts
-df_2010_grouped.matrix = df_2010_grouped.matrix[,common_col_names]
-df_2011_grouped.matrix = df_2011_grouped.matrix[,common_col_names]
+df_2010_grouped_subsampled.matrix = df_2010_grouped_subsampled.matrix[,common_col_names]
+df_2011_grouped_subsampled.matrix = df_2011_grouped_subsampled.matrix[,common_col_names]
 ```
 
 ```{r, eval = bool_execute_heavy_chunks}
@@ -455,7 +456,7 @@ save(models_summary, file = file_save_name)
 ```
 
 ```{r, eval = bool_execute_heavy_chunks, warning=FALSE}
-models_summary$lasso.zeros.noint = Lasso_Offset_CV(cv.sets = month.zeros.cv.k4.sets,
+models_summary$lasso.poi.zeros = Lasso_Offset_CV(cv.sets = month.zeros.cv.k4.sets,
                                           my.lambda.vals = exp(seq(-15, 3, 0.1)) %>% sort(decreasing = TRUE),
                                           my.family = poisson())
 
@@ -643,35 +644,35 @@ save(models_summary, file = file_save_name)
 ```{r, results='hide' ,eval = bool_execute_heavy_chunks, warning=FALSE}
 
 # LASSO ---------------------
-temp.fit = glmnet(x = df_2010_grouped.matrix,
+temp.fit = glmnet(x = df_2010_grouped_subsampled.matrix,
                   y = log(df_2010_grouped$count) -log(12),
                   lambda = models_summary$lasso$lmin)
 
 models_summary$lasso$beta = temp.fit$beta
 models_summary$lasso$test_error = RMSEfun(df_2011_grouped$count, 
-                                          exp(predict(temp.fit, newx = df_2011_grouped.matrix) + log(12)))
+                                          exp(predict(temp.fit, newx = df_2011_grouped_subsampled.matrix) + log(12)))
 
-temp.fit = glmnet(x = df_2010_grouped.matrix,
+temp.fit = glmnet(x = df_2010_grouped_subsampled.matrix,
                   y = log(df_2010_grouped$count) -log(12),
                   lambda = models_summary$lasso$l1se)
 
 models_summary$lasso$beta1se = temp.fit$beta
 models_summary$lasso$test_error1se = RMSEfun(df_2011_grouped$count, 
-                                          exp(predict(temp.fit, newx = df_2011_grouped.matrix) + log(12)))
+                                          exp(predict(temp.fit, newx = df_2011_grouped_subsampled.matrix) + log(12)))
 
 # Elasticnet ---------------------
-temp.fit = glmnet(x = df_2010_grouped.matrix,
+temp.fit = glmnet(x = df_2010_grouped_subsampled.matrix,
                   y = log(df_2010_grouped$count) -log(12),
                   alpha = models_summary$elasticnet$amin,
                   lambda = models_summary$elasticnet$lmin)
 
 models_summary$elasticnet$beta = temp.fit$beta
 models_summary$elasticnet$test_error = RMSEfun(df_2011_grouped$count, 
-                                          exp(predict(temp.fit, newx = df_2011_grouped.matrix) + log(12)))
+                                          exp(predict(temp.fit, newx = df_2011_grouped_subsampled.matrix) + log(12)))
 
 
 # SCAD ---------------------
-temp.fit = picasso(X = df_2010_grouped.matrix,
+temp.fit = picasso(X = df_2010_grouped_subsampled.matrix,
                   Y = log(df_2010_grouped$count) -log(12),
                   gamma = models_summary$scad$gmin,
                   lambda = models_summary$scad$lmin,
@@ -681,12 +682,12 @@ temp.lind = which(models_summary$scad$lambda == models_summary$scad$lmin)
 
 models_summary$scad$beta = temp.fit$beta
 models_summary$scad$test_error = RMSEfun(df_2011_grouped$count, 
-                                          exp(my.predict.gaussian(temp.fit, newdata = df_2011_grouped.matrix,
+                                          exp(my.predict.gaussian(temp.fit, newdata = df_2011_grouped_subsampled.matrix,
                                                                lambda.idx = 1) +
                                                 log(12)))
 
 # MCP ----------------------
-temp.fit = picasso(X = df_2010_grouped.matrix,
+temp.fit = picasso(X = df_2010_grouped_subsampled.matrix,
                   Y = log(df_2010_grouped$count) -log(12),
                   gamma = models_summary$mcp$gmin,
                   lambda = models_summary$mcp$lmin,
@@ -696,43 +697,43 @@ temp.lind = which(models_summary$mcp$lambda == models_summary$mcp$lmin)
 
 models_summary$mcp$beta = temp.fit$beta
 models_summary$mcp$test_error = RMSEfun(df_2011_grouped$count, 
-                                          exp(my.predict.gaussian(temp.fit, newdata = df_2011_grouped.matrix,
+                                          exp(my.predict.gaussian(temp.fit, newdata = df_2011_grouped_subsampled.matrix,
                                                                lambda.idx = 1) +
                                                 log(12)))
 
 
 # LASSO Poisson ---------------------
-temp.fit = glmnet(x = df_2010_grouped.matrix,
+temp.fit = glmnet(x = df_2010_grouped_subsampled.matrix,
                   y = df_2010_grouped$count,
-                  offset = rep(log(12), nrow(df_2010_grouped.matrix)),
+                  offset = rep(log(12), nrow(df_2010_grouped_subsampled.matrix)),
                   lambda = models_summary$lasso.poi$lmin,
                   family = poisson())
 
 models_summary$lasso.poi$beta = temp.fit$beta
 models_summary$lasso.poi$test_error = RMSEfun(df_2011_grouped$count, 
                                           predict(temp.fit,
-                                                  newx = df_2011_grouped.matrix,
-                                                  newoffset = rep(log(12), nrow(df_2011_grouped.matrix)),
+                                                  newx = df_2011_grouped_subsampled.matrix,
+                                                  newoffset = rep(log(12), nrow(df_2011_grouped_subsampled.matrix)),
                                                   type = "response"))
 
-temp.fit = glmnet(x = df_2010_grouped.matrix,
+temp.fit = glmnet(x = df_2010_grouped_subsampled.matrix,
                   y = df_2010_grouped$count,
-                  offset = rep(log(12), nrow(df_2010_grouped.matrix)),
+                  offset = rep(log(12), nrow(df_2010_grouped_subsampled.matrix)),
                   lambda = models_summary$lasso.poi$l1se,
                   family = poisson())
 
 models_summary$lasso.poi$beta1se = temp.fit$beta
 models_summary$lasso.poi$test_error1se = RMSEfun(df_2011_grouped$count, 
                                           predict(temp.fit,
-                                                  newx = df_2011_grouped.matrix,
-                                                  newoffset = rep(log(12), nrow(df_2011_grouped.matrix),
+                                                  newx = df_2011_grouped_subsampled.matrix,
+                                                  newoffset = rep(log(12), nrow(df_2011_grouped_subsampled.matrix),
                                                   type = "response")))
 
 
 # Elasticnet Poisson ---------------------
-temp.fit = glmnet(x = df_2010_grouped.matrix,
+temp.fit = glmnet(x = df_2010_grouped_subsampled.matrix,
                   y = df_2010_grouped$count,
-                  offset = rep(log(12), nrow(df_2010_grouped.matrix)),
+                  offset = rep(log(12), nrow(df_2010_grouped_subsampled.matrix)),
                   alpha = models_summary$elasticnet.poi$amin,
                   lambda = models_summary$lasso.poi$lmin,
                   family = poisson())
@@ -740,8 +741,8 @@ temp.fit = glmnet(x = df_2010_grouped.matrix,
 models_summary$elasticnet.poi$beta = temp.fit$beta
 models_summary$elasticnet.poi$test_error = RMSEfun(df_2011_grouped$count, 
                                           predict(temp.fit,
-                                                  newx = df_2011_grouped.matrix,
-                                                  newoffset = rep(log(12), nrow(df_2011_grouped.matrix),
+                                                  newx = df_2011_grouped_subsampled.matrix,
+                                                  newoffset = rep(log(12), nrow(df_2011_grouped_subsampled.matrix),
                                                   type = "response")))
 
 ```
@@ -759,7 +760,7 @@ Benchè con la libreria impiegata non siano fornite informazione precise sulla r
 par(mfrow = c(1,2))
 
 # SCAD ---------------------
-temp.fit = picasso(X = df_2010_grouped.matrix,
+temp.fit = picasso(X = df_2010_grouped_subsampled.matrix,
                   Y = log(df_2010_grouped$count) -log(12),
                   gamma = models_summary$scad$gmin,
                   lambda = models_summary$scad$lambda,
@@ -771,7 +772,7 @@ plot(log(temp.fit$lambda), t(temp.fit$beta),
 abline(v = log(models_summary$scad$lmin))
 
 # MCP ----------------------
-temp.fit = picasso(X = df_2010_grouped.matrix,
+temp.fit = picasso(X = df_2010_grouped_subsampled.matrix,
                   Y = log(df_2010_grouped$count) -log(12),
                   gamma = models_summary$mcp$gmin,
                   lambda = models_summary$mcp$lambda,
