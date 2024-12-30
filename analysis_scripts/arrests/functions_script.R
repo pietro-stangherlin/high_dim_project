@@ -710,6 +710,29 @@ ExtractBestPars <- function(sublist) {
   )
 }
 
+# Plot --------------------------------
+# plot the first_n coef with biggest abs
+PlotFirstCoefsAbs = function(coef_vec, coef_names,
+                          first_n,
+                          my.main){
+  indexes <- order(abs(coef_vec), decreasing = TRUE)[1:first_n]
+  
+  temp_df = data.frame(beta = coef_vec[indexes], names = coef_names[indexes])
+  temp_df <- temp_df[order(temp_df$beta), ]
+  
+  dotchart(temp_df$beta, labels = temp_df$names, pch = 16,
+           main = my.main)
+}
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -163,7 +163,9 @@ L'assunzione di fondo è che, almeno per i conteggi fino alla soglia considerata
 
 Si considerano due tipologie di dataset, entrambi impiegano il sottocampiomamento, ma in uno i conteggi nulli sono presenti e nell'altro sono assenti (i modelli per risposta continua sono adattati impiegando una trasformazione logaritmica dei dati senza conteggi nulli).
 
-Per questo studio la soglia selezionata che è apparsa ragionevole in base alle considerazioni precedenti è 10.
+Per questo studio la soglia selezionata che è apparsa ragionevole in base alle considerazioni precedenti è di conteggi uguali a 10.
+
+Il sottocampionamento è effettuato anche per i dataset completi relativi a 2010 e 2011 (escludendo i mesi come variabile di raggruppamento), ma non sono stati aggiunti gli zeri per permettere il confronto tra modelli per risposta continua.
 
 
 ```{r, eval = bool_execute_heavy_chunks, results='hide'}
@@ -392,7 +394,7 @@ IL dtaset presenta principalmente esplicative categoriali, benchè le due esplic
 
 ### Modelli per risposta continua
 
-Nell'impiego dei modelli con risposta continua (con errori gaussiani i.i.d) si è scelto di stimare il modello su una trasformazione logaritmica della risposta: "y = count / n_month_train" e calcolare l'errore di previsioni sulla trasformazione "count = exp(y) * n_month_test" rispetto al numero di conteggi osservati, in questo modo la previsione è sempre positiva.
+Nell'impiego dei modelli con risposta continua (con errori gaussiani i.i.d) si è scelto di stimare il modello su una trasformazione logaritmica della risposta: "y = count / n_month_train" (per i dati senza introduzione di conteggi nulli) e calcolare l'errore di previsioni sulla trasformazione "count = exp(y) * n_month_test" rispetto al numero di conteggi osservati, in questo modo la previsione è sempre positiva.
 
 ### Modelli e procedure considerati
 
@@ -481,15 +483,14 @@ models_summary$elasticnet.poi.zeros = Elastic_Offset_Cv(cv.sets = month.zeros.cv
                                                         my.lambda.vals = exp(seq(-10, 2, 0.2)) %>% sort(decreasing = TRUE),
                                                         my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 10),
                                                         my.family = poisson())
-```
 
-
-```{r}
 # backup to save key model info
 save(models_summary, file = file_save_name)
 ```
 
-Sia per il modello normale che per quello Poisson il $\lambda$ minimo è molto vicino a zero (poichè la soluzione è sul bordo si dovrebbe provare a diminuire ulteriormente $\lambda$, ma già così i coefficienti sono quasi uguali alle stime non penalizzate).
+
+Per il modello normale il $\lambda$ minimo è molto vicino a zero (poichè la soluzione è sul bordo si dovrebbe provare a diminuire ulteriormente $\lambda$, ma già così i coefficienti sono quasi uguali alle stime non penalizzate).
+Per il modello Poisson 
 ```{r, fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d}
 par(mfrow = c(1,2))
 
@@ -607,6 +608,9 @@ save(models_summary, file = file_save_name)
 # models_summary$lasso.negbin = LASSO_NegBin_Offset_Cv(cv.sets = month.cv.k4.sets,
 #                                                         my.lambda.vals = exp(seq(-10, 2, 0.2)) %>% sort(decreasing = TRUE),
 #                                                         my.theta.vals = seq(1e-5, 20, length = 20))
+
+# backup to save key model info
+# save(models_summary, file = file_save_name)
 ```
 
 ```{r, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT}
@@ -635,45 +639,40 @@ par(mfrow = c(1,1))
 par(mfrow = c(1,1))
 ```
 
-```{r}
-# backup to save key model info
-save(models_summary, file = file_save_name)
-```
-
 
 ```{r, results='hide' ,eval = bool_execute_heavy_chunks, warning=FALSE}
 
 # LASSO ---------------------
 temp.fit = glmnet(x = df_2010_grouped_subsampled.matrix,
-                  y = log(df_2010_grouped$count) -log(12),
+                  y = log(df_2010_grouped_subsampled$count) -log(12),
                   lambda = models_summary$lasso$lmin)
 
 models_summary$lasso$beta = temp.fit$beta
-models_summary$lasso$test_error = RMSEfun(df_2011_grouped$count, 
+models_summary$lasso$test_error = RMSEfun(df_2011_grouped_subsampled$count, 
                                           exp(predict(temp.fit, newx = df_2011_grouped_subsampled.matrix) + log(12)))
 
 temp.fit = glmnet(x = df_2010_grouped_subsampled.matrix,
-                  y = log(df_2010_grouped$count) -log(12),
+                  y = log(df_2010_grouped_subsampled$count) -log(12),
                   lambda = models_summary$lasso$l1se)
 
 models_summary$lasso$beta1se = temp.fit$beta
-models_summary$lasso$test_error1se = RMSEfun(df_2011_grouped$count, 
+models_summary$lasso$test_error1se = RMSEfun(df_2011_grouped_subsampled$count, 
                                           exp(predict(temp.fit, newx = df_2011_grouped_subsampled.matrix) + log(12)))
 
 # Elasticnet ---------------------
 temp.fit = glmnet(x = df_2010_grouped_subsampled.matrix,
-                  y = log(df_2010_grouped$count) -log(12),
+                  y = log(df_2010_grouped_subsampled$count) -log(12),
                   alpha = models_summary$elasticnet$amin,
                   lambda = models_summary$elasticnet$lmin)
 
 models_summary$elasticnet$beta = temp.fit$beta
-models_summary$elasticnet$test_error = RMSEfun(df_2011_grouped$count, 
+models_summary$elasticnet$test_error = RMSEfun(df_2011_grouped_subsampled$count, 
                                           exp(predict(temp.fit, newx = df_2011_grouped_subsampled.matrix) + log(12)))
 
 
 # SCAD ---------------------
 temp.fit = picasso(X = df_2010_grouped_subsampled.matrix,
-                  Y = log(df_2010_grouped$count) -log(12),
+                  Y = log(df_2010_grouped_subsampled$count) -log(12),
                   gamma = models_summary$scad$gmin,
                   lambda = models_summary$scad$lmin,
                   method = "scad")
@@ -681,14 +680,14 @@ temp.fit = picasso(X = df_2010_grouped_subsampled.matrix,
 temp.lind = which(models_summary$scad$lambda == models_summary$scad$lmin)
 
 models_summary$scad$beta = temp.fit$beta
-models_summary$scad$test_error = RMSEfun(df_2011_grouped$count, 
+models_summary$scad$test_error = RMSEfun(df_2011_grouped_subsampled$count, 
                                           exp(my.predict.gaussian(temp.fit, newdata = df_2011_grouped_subsampled.matrix,
                                                                lambda.idx = 1) +
                                                 log(12)))
 
 # MCP ----------------------
 temp.fit = picasso(X = df_2010_grouped_subsampled.matrix,
-                  Y = log(df_2010_grouped$count) -log(12),
+                  Y = log(df_2010_grouped_subsampled$count) -log(12),
                   gamma = models_summary$mcp$gmin,
                   lambda = models_summary$mcp$lmin,
                   method = "mcp")
@@ -696,7 +695,7 @@ temp.fit = picasso(X = df_2010_grouped_subsampled.matrix,
 temp.lind = which(models_summary$mcp$lambda == models_summary$mcp$lmin)
 
 models_summary$mcp$beta = temp.fit$beta
-models_summary$mcp$test_error = RMSEfun(df_2011_grouped$count, 
+models_summary$mcp$test_error = RMSEfun(df_2011_grouped_subsampled$count, 
                                           exp(my.predict.gaussian(temp.fit, newdata = df_2011_grouped_subsampled.matrix,
                                                                lambda.idx = 1) +
                                                 log(12)))
@@ -704,26 +703,26 @@ models_summary$mcp$test_error = RMSEfun(df_2011_grouped$count,
 
 # LASSO Poisson ---------------------
 temp.fit = glmnet(x = df_2010_grouped_subsampled.matrix,
-                  y = df_2010_grouped$count,
+                  y = df_2010_grouped_subsampled$count,
                   offset = rep(log(12), nrow(df_2010_grouped_subsampled.matrix)),
                   lambda = models_summary$lasso.poi$lmin,
                   family = poisson())
 
 models_summary$lasso.poi$beta = temp.fit$beta
-models_summary$lasso.poi$test_error = RMSEfun(df_2011_grouped$count, 
+models_summary$lasso.poi$test_error = RMSEfun(df_2011_grouped_subsampled$count, 
                                           predict(temp.fit,
                                                   newx = df_2011_grouped_subsampled.matrix,
                                                   newoffset = rep(log(12), nrow(df_2011_grouped_subsampled.matrix)),
                                                   type = "response"))
 
 temp.fit = glmnet(x = df_2010_grouped_subsampled.matrix,
-                  y = df_2010_grouped$count,
+                  y = df_2010_grouped_subsampled$count,
                   offset = rep(log(12), nrow(df_2010_grouped_subsampled.matrix)),
                   lambda = models_summary$lasso.poi$l1se,
                   family = poisson())
 
 models_summary$lasso.poi$beta1se = temp.fit$beta
-models_summary$lasso.poi$test_error1se = RMSEfun(df_2011_grouped$count, 
+models_summary$lasso.poi$test_error1se = RMSEfun(df_2011_grouped_subsampled$count, 
                                           predict(temp.fit,
                                                   newx = df_2011_grouped_subsampled.matrix,
                                                   newoffset = rep(log(12), nrow(df_2011_grouped_subsampled.matrix),
@@ -732,14 +731,14 @@ models_summary$lasso.poi$test_error1se = RMSEfun(df_2011_grouped$count,
 
 # Elasticnet Poisson ---------------------
 temp.fit = glmnet(x = df_2010_grouped_subsampled.matrix,
-                  y = df_2010_grouped$count,
+                  y = df_2010_grouped_subsampled$count,
                   offset = rep(log(12), nrow(df_2010_grouped_subsampled.matrix)),
                   alpha = models_summary$elasticnet.poi$amin,
                   lambda = models_summary$lasso.poi$lmin,
                   family = poisson())
 
 models_summary$elasticnet.poi$beta = temp.fit$beta
-models_summary$elasticnet.poi$test_error = RMSEfun(df_2011_grouped$count, 
+models_summary$elasticnet.poi$test_error = RMSEfun(df_2011_grouped_subsampled$count, 
                                           predict(temp.fit,
                                                   newx = df_2011_grouped_subsampled.matrix,
                                                   newoffset = rep(log(12), nrow(df_2011_grouped_subsampled.matrix),
@@ -761,7 +760,7 @@ par(mfrow = c(1,2))
 
 # SCAD ---------------------
 temp.fit = picasso(X = df_2010_grouped_subsampled.matrix,
-                  Y = log(df_2010_grouped$count) -log(12),
+                  Y = log(df_2010_grouped_subsampled$count) -log(12),
                   gamma = models_summary$scad$gmin,
                   lambda = models_summary$scad$lambda,
                   method = "scad")
@@ -773,7 +772,7 @@ abline(v = log(models_summary$scad$lmin))
 
 # MCP ----------------------
 temp.fit = picasso(X = df_2010_grouped_subsampled.matrix,
-                  Y = log(df_2010_grouped$count) -log(12),
+                  Y = log(df_2010_grouped_subsampled$count) -log(12),
                   gamma = models_summary$mcp$gmin,
                   lambda = models_summary$mcp$lambda,
                   method = "mcp")
@@ -819,7 +818,7 @@ models.errors
 ```
 
 
-I grafici dei coefficienti stimati confermano, per LASSO ed Elasticnet una non selezione delle variabili.
+I grafici dei coefficienti stimati confermano, per LASSO ed Elasticnet non avviene selezione delle variabili.
 ```{r,  fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d}
 
 par(mfrow = c(1,2))
@@ -848,6 +847,24 @@ legend("bottomright",
        bty = "n")
 ```
 
+
+Le stimne non sono sparse nemmeno con il criterio dell'errore a un errore standard
+```{r,  fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d}
+
+par(mfrow = c(1,2))
+plot(models_summary$lasso$beta1se, pch = 16,
+     main = "LASSO 1se",
+     xlab = "beta index", ylab = "beta")
+
+plot(models_summary$lasso.poi$beta1se, pch = 16,
+      main = "Poisson LASSO 1se",
+     xlab = "beta index", ylab = "beta")
+
+```
+
+
+Anche per SCAD ed MCP non avviene selezione di variabili.
+
 ```{r}
 plot(models_summary$scad$beta, pch = 16,
       main = "SCAD & MCP beta estimates",
@@ -861,6 +878,30 @@ legend("bottomright",
        lty = 1,
        bty = "n")
 ```
+Per provare ad avere qualche informazione sul fenomeno spiegato dai modelli si decide di selezionare un certo numero tra i coefficienti più grandi in valore assoluto.
+
+```{r}
+beta_names = df_2010_grouped_subsampled.matrix %>% colnames
+```
+
+
+```{r}
+PlotFirstCoefsAbs(coef_vec = models_summary$elasticnet$beta,
+                  coef_names = beta_names,
+                  first_n = 20,
+                  my.main = "Elasticnet biggest abs beta")
+
+PlotFirstCoefsAbs(coef_vec = models_summary$scad$beta,
+                  coef_names = beta_names,
+                  first_n = 20,
+                  my.main = "SCAD biggest abs beta")
+
+PlotFirstCoefsAbs(coef_vec = models_summary$elasticnet.poi$beta,
+                  coef_names = beta_names,
+                  first_n = 20,
+                  my.main = "Elasticnet poi biggest abs beta")
+```
+
 
 
 
