@@ -155,7 +155,7 @@ df_2011_grouped = suppressMessages(df_2011 %>%
 
 ```
 
-```{r, fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d,fig.cap="Tabella di frequenza assoluta per il numero di arresti raggruppando i dati del 2010 per tutte le variabili ad eccezione dei mesi", fig.label="fig:count"}
+```{r count-arrests, fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d,fig.cap="Tabella di frequenza assoluta per il numero di arresti raggruppando i dati del 2010 per tutte le variabili ad eccezione dei mesi"}
 df_2010_grouped$count %>%
   table %>% 
   barplot(main = "Arrests count 2010 (grouping by covariates)",
@@ -511,9 +511,9 @@ save(models_summary, file = file_save_name)
 
 Per il modello normale il $\lambda$ minimo è molto vicino a zero (poichè la soluzione è sul bordo si dovrebbe provare a diminuire ulteriormente $\lambda$, ma già così i coefficienti sono quasi uguali alle stime non penalizzate).
 Per il modello Poisson il $\lambda$ selezionato è maggiore. (Figura 
-$\@ref(fig:cv_err_lasso_linear_poi)$)
+\@ref(fig:cv-err-lasso-linear-poi))
 
-```{r cv_err_lasso_linear_poi, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT, fig.cap="Grafici dell'errore di convalida incrociata in funzione del parametro di regolazione per LASSO per moodelli lineare e Poisson"}
+```{r cv-err-lasso-linear-poi, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT, fig.cap="Grafici dell'errore di convalida incrociata in funzione del parametro di regolazione per LASSO per moodelli lineare e Poisson"}
 par(mfrow = c(1,2))
 
 PlotOneDim(x = log(models_summary$lasso$lambda),
@@ -540,9 +540,9 @@ PlotOneDim(x = log(models_summary$lasso.poi$lambda),
 ```
 
 
-Per il modello continuo Elasticnet individua un $\alpha$ intermedio tra Ridge e LASSO, ma come sopra il $\lambda$ è prossimo a zero (considerazioni uguali a sopra), nel modello Poisson invece è selezionata una Ridge con $\lambda$ non prossimo a zero.
+Per il modello continuo Elasticnet individua un $\alpha$ intermedio tra Ridge e LASSO, ma come sopra il $\lambda$ è prossimo a zero (considerazioni uguali a sopra), nel modello Poisson invece è selezionata una Ridge con $\lambda$ non prossimo a zero. (Figura \@ref(fig:fig-cv-err-elastic-linear-poi))
 
-```{r, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT,fig.cap="Curve di livello dell'errore di convalida incrociata in funzione dei parametri di regolazione per Elasticnet dei modelli lineare e Poisson", fig.label="fig_cv_err_elastic_linear_poi"}
+```{r fig-cv-err-elastic-linear-poi, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT,fig.cap="Curve di livello dell'errore di convalida incrociata in funzione dei parametri di regolazione per Elasticnet dei modelli lineare e Poisson"}
 par(mfrow = c(1,2))
 
 TwoParErrPlot(model_list = models_summary$elasticnet,
@@ -569,8 +569,8 @@ par(mfrow = c(1,1))
 ```
 
 
-Sia per SCAD che per MCP il $\lambda$ selezionato è prossimo a zero, provando ad aumentare ulteriormente $\gamma$ e diminuire $\lambda$ la soluzione sostanzialmente non cambia.
-```{r, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT,fig.cap="Curve di livello dell'errore di convalida incrociata in funzione dei parametri di regolazione per SCAD ed MCP del modello lineare", fig.label="fig_cv_err_scad_mcp"}
+Sia per SCAD che per MCP il $\lambda$ selezionato è prossimo a zero, provando ad aumentare ulteriormente $\gamma$ e diminuire $\lambda$ la soluzione sostanzialmente non cambia. (Figura \@ref(fig:fig-cv-err-scad-mcp))
+```{r fig-cv-err-scad-mcp, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT,fig.cap="Curve di livello dell'errore di convalida incrociata in funzione dei parametri di regolazione per SCAD ed MCP del modello lineare"}
 
 par(mfrow = c(1,2))
 
@@ -598,8 +598,8 @@ par(mfrow = c(1,1))
 ```
 
 
-Per i modelli di Poisson adattati con conteggi nulli i $\lambda$ ottimi tendono al metodo non penalizzato; nel caso di Elasticnet è selezionata una ridge.
-```{r, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT,fig.cap="Grafici dell'errore di convalida incrociata in funzione dei parametri di regolazione per LASSO ed Elasticnet per modelli Poisson per dati con aggiunta di zeri", fig.label="fig_cv_err_zeros_poi"}
+Per i modelli di Poisson adattati con conteggi nulli i $\lambda$ ottimi tendono al metodo non penalizzato; nel caso di Elasticnet è selezionata una ridge (Figura \@ref(fig:fig-cv-err-zeros-poi)).
+```{r fig-cv-err-zeros-poi, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT,fig.cap="Grafici dell'errore di convalida incrociata in funzione dei parametri di regolazione per LASSO ed Elasticnet per modelli Poisson per dati con aggiunta di zeri"}
 par(mfrow = c(1,2))
 
 PlotOneDim(x = log(models_summary$lasso.poi.zeros$lambda),
@@ -872,8 +872,8 @@ models.errors
 
 I grafici dei coefficienti stimati confermano, per LASSO ed Elasticnet non avviene selezione delle variabili.
 Le stime non sono sparse nemmeno con il criterio dell'errore a un errore standard.
-Anche per SCAD ed MCP non avviene selezione di variabili: le stime (non riportate) sono quasi uguali a quelle LASSO ed Elasticnet, non si reputa quindi necessario controllare l'eventuale regione non convessa delle stime.
-```{r,  fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d,fig.cap="Grafici dei coefficienti stimati sui dati 2010 dei modelli selezionati precedentemente per LASSO ed Elasticnet per modelli lineare e Poisson", fig.label="fig_beta_lasso_elastic_linear_poi"}
+Anche per SCAD ed MCP non avviene selezione di variabili: le stime (non riportate) sono quasi uguali a quelle LASSO ed Elasticnet, non si reputa quindi necessario controllare l'eventuale regione non convessa delle stime (Figura \@ref(fig:fig-beta-lasso-elastic-linear-poi)).
+```{r fig-beta-lasso-elastic-linear-poi,  fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d,fig.cap="Grafici dei coefficienti stimati sui dati 2010 dei modelli selezionati precedentemente per LASSO ed Elasticnet per modelli lineare e Poisson"}
 
 par(mfrow = c(1,2))
 plot(models_summary$lasso$beta, pch = 16,
@@ -917,8 +917,8 @@ legend("bottomright",
 ```
 
 
-I modelli Poisson adattati considerando gli zeri presentano una maggiore selezione di variabili rispetto ai precedenti.
-```{r,  fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d,fig.cap="Grafici dei coefficienti stimati sui dati 2010 dei modelli Poisson (LASSO) selezionati precedentemente sui dati con aggiunta di zeri", fig.label="fig_beta_zeros_lasso_poi"}
+I modelli Poisson adattati considerando gli zeri presentano una maggiore selezione di variabili rispetto ai precedenti (Figura \@ref(fig:fig-beta-zeros-lasso-poi)).
+```{r fig-beta-zeros-lasso-poi,  fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d,fig.cap="Grafici dei coefficienti stimati sui dati 2010 dei modelli Poisson (LASSO) selezionati precedentemente sui dati con aggiunta di zeri"}
 
 par(mfrow = c(1,1))
 plot(models_summary$lasso.poi.zeros$beta, pch = 16,
@@ -977,7 +977,7 @@ models.zero.beta
 
 
 
-E' riportata la mappa degli NTA colorati in base al valore del corrispettivo coefficiente (marginale) (le zone grigie corrispondono a zone non presenti nei dati, e quindi coefficienti non stimati),per alcuni NTA sono presenti i nomi dei corrispettivi codici, questi sono in corrispondenza dei coefficienti più grandi relativi a termini di interazione in cui sono presenti tali NTA (vedasi sotto).
+E' riportata la mappa (Figura \@ref(fig:fig-beta-lasso-zeros-nta2020)) degli NTA colorati in base al valore del corrispettivo coefficiente (marginale) (le zone grigie corrispondono a zone non presenti nei dati, e quindi coefficienti non stimati),per alcuni NTA sono presenti i nomi dei corrispettivi codici, questi sono in corrispondenza dei coefficienti più grandi relativi a termini di interazione in cui sono presenti tali NTA (vedasi sotto).
 
 ```{r, results='hide'}
 geo_data = st_read("../../data/coordinates_maps/nta.geojson")
@@ -1009,7 +1009,7 @@ geo_data <- merge(geo_data, nta_beta_matrix, by.x = "NTA2020", by.y = "NTA2020",
 
 ```
 
-```{r, warning=FALSE,fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d,fig.cap="Grafici dei coefficienti stimati sui dati 2010 del modello Poisson (LASSO) selezionato con criterio a un errore standard sui dati con aggiunta di zeri relativi a ciascun NTA", fig.label="fig_beta_lasso_zeros_nta2020"}
+```{r fig-beta-lasso-zeros-nta2020, warning=FALSE,fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d,fig.cap="Grafici dei coefficienti stimati sui dati 2010 del modello Poisson (LASSO) selezionato con criterio a un errore standard sui dati con aggiunta di zeri relativi a ciascun NTA"}
 # Create the map plot with the viridis palette
 map_with_viridis <- ggplot(data = geo_data) +
   geom_sf(aes(fill = beta)) +
@@ -1081,8 +1081,8 @@ Per le macro categorie di reato solo l'omicidio presenta una coefficiente positi
 LAW_CAT_CD_betas
 ```
 
-Si riporta il grafico dei coefficienti per le categorie più granulari di arresto.
-```{r, fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d,fig.cap="Grafici dei coefficienti stimati sui dati 2010 del modello Poisson (LASSO) selezionato con criterio a un errore standard sui dati con aggiunta di zeri relativi alle categorie granulare di arresto KYCD", fig.label="fig_beta_lasso_zeros_ky_cd"}
+Si riporta il grafico dei coefficienti per le categorie più granulari di arresto (Figura \@ref(fig:fig-beta-lasso-zeros-ky-cd)).
+```{r fig-beta-lasso-zeros-ky-cd, fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d,fig.cap="Grafici dei coefficienti stimati sui dati 2010 del modello Poisson (LASSO) selezionato con criterio a un errore standard sui dati con aggiunta di zeri relativi alle categorie granulare di arresto KYCD"}
 dotchart(KY_CD_betas$beta[order(KY_CD_betas$beta)],
          labels = KY_CD_betas$KY_CD[order(KY_CD_betas$beta)],
          cex = 0.7, pch = 16, main = "KY_CD beta")
@@ -1092,9 +1092,9 @@ dotchart(KY_CD_betas$beta[order(KY_CD_betas$beta)],
 Poichè si è più interessati ai termini correlati positivamente con il numero di arresti si riportano di seguito i 20 coefficienti più grandi del modello Poisson più sparso descritto sopra.
 
 
-Il termine più grande e gli altri due che coinvolgono l'interazioe tra NTA e la fascia d'età massima compensano il valore negativo del coefficiente marginale per quella fascia d'età per quelle specifiche zone; un ragionamento analogo vale per i termini di interazione che comprendono la modalità "razza asiatica".
+Il termine più grande e gli altri due che coinvolgono l'interazioe tra NTA e la fascia d'età massima compensano il valore negativo del coefficiente marginale per quella fascia d'età per quelle specifiche zone; un ragionamento analogo vale per i termini di interazione che comprendono la modalità "razza asiatica" (Figura \@ref(fig:fig-beta-lasso-zeros-interaction))
 
-```{r,fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d,fig.cap="Grafici dei 20 più grandi coefficienti stimati sui dati 2010 del modello Poisson (LASSO) selezionato con criterio a un errore standard sui dati con aggiunta di zeri", fig.label="fig_beta_lasso_zeros_interaction"}
+```{r fig-beta-lasso-zeros-interaction,fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d,fig.cap="Grafici dei 20 più grandi coefficienti stimati sui dati 2010 del modello Poisson (LASSO) selezionato con criterio a un errore standard sui dati con aggiunta di zeri"}
 models_summary$lasso.poi.zeros$beta_big_1se = PlotFirstCoefs(coef_vec = models_summary$lasso.poi.zeros$beta1se,
                   coef_names = beta_names,
                   first_n = 20,
