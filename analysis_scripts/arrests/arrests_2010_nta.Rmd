@@ -16,6 +16,7 @@ header-includes:
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 knitr::opts_chunk$set(fig.align = 'center')
+
 library(bookdown)
 ```
 
