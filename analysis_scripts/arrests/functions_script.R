@@ -9,6 +9,7 @@ library(picasso) # sparse model matrix scad and mcp
 library(gglasso)
 library(viridis)
 library(hash)
+library(mpath)
 
 # Preprocessing -------------------------------------------------
 
