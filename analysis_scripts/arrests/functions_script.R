@@ -72,6 +72,21 @@ MapToInteger = function(vec){
   return(res)
 }
 
+# given a list where each element is a variable name
+# and contains some values for that variables
+# filter the dataframe keeping only rows with values in the list (for each variable)
+KeepCommon = function(values_list, my.df){
+  var_names = names(values_list)
+  
+  temp_df = my.df
+  
+  for(var_name in var_names){
+    temp_df = temp_df %>% filter(!!sym(var_name) %in% values_list[[var_name]])
+  }
+  
+  return(temp_df)
+  
+}
 
 
 GenerateZeroCounts <- function(df_no_strat, nta_strat_df, Z = 5000) {
@@ -174,7 +189,7 @@ MakeMonthCvSets <- function(my_df, month_sets_ind, formula, threshold) {
   return(cv.sets)
 }
 
-# Function to create cross-validation sets for grouped lasso
+# Function to create cross-validation sets for grouped lasso glinternet
 MakeMonthCvSetsGG <- function(my_df, month_sets_ind, threshold) {
   cv.sets <- list()
   
@@ -192,12 +207,26 @@ MakeMonthCvSetsGG <- function(my_df, month_sets_ind, threshold) {
     
     cv.sets[[i]]$train$df = Subsample_Below_Threshold(df = cv.sets[[i]]$train$df, threshold = threshold)
     
-    cv.sets[[i]]$train$df$KY_CD = as.integer(cv.sets[[i]]$train$df$KY_CD) %>% MapToInteger()
-    cv.sets[[i]]$train$df$LAW_CAT_CD = as.integer(cv.sets[[i]]$train$df$LAW_CAT_CD) %>% MapToInteger()
-    cv.sets[[i]]$train$df$AGE_GROUP = as.integer(cv.sets[[i]]$train$df$AGE_GROUP) %>% MapToInteger()
-    cv.sets[[i]]$train$df$PERP_SEX = as.integer(cv.sets[[i]]$train$df$PERP_SEX) %>% MapToInteger()
-    cv.sets[[i]]$train$df$PERP_RACE = as.integer(cv.sets[[i]]$train$df$PERP_RACE) %>% MapToInteger()
-    cv.sets[[i]]$train$df$NTA2020 = as.integer(cv.sets[[i]]$train$df$NTA2020) %>% MapToInteger()
+    factor_columns <- (1:ncol(cv.sets[[i]]$train$df))[sapply(cv.sets[[i]]$train$df, is.factor)]
+    
+    temp_uniques_fact = apply(cv.sets[[i]]$train$df[,factor_columns], 2, unique)
+    
+    
+    cv.sets[[i]]$train$df = KeepCommon(values_list = temp_uniques_fact,
+                                       my.df = cv.sets[[i]]$train$df)
+    
+    # convert qualitative variables to valid format for glinternet (i.e integers {0,1,2,...})
+    cv.sets[[i]]$train$df[,factor_columns] = apply(cv.sets[[i]]$train$df[,factor_columns],2, MapToInteger)
+    
+    
+    count_index = which(colnames(cv.sets[[i]]$train$df) == "count")
+    
+    cv.sets[[i]]$train$model_matrix = as.matrix(cv.sets[[i]]$train$df[,-count_index])
+    
+    cv.sets[[i]]$train$numlevels = c(apply(cv.sets[[i]]$train$model_matrix[,1:6], 2,
+                                           function(col) length(unique(col))), rep(1,9))
+    
+    cv.sets[[i]]$train$df <- data.frame(count = cv.sets[[i]]$train$df$count)
     
     
     # here it's the number of months considered
@@ -209,6 +238,17 @@ MakeMonthCvSetsGG <- function(my_df, month_sets_ind, threshold) {
     
     cv.sets[[i]]$test$df = Subsample_Below_Threshold(df = cv.sets[[i]]$test$df, threshold = threshold)
     
+    cv.sets[[i]]$test$df = KeepCommon(values_list = temp_uniques_fact,
+                                       my.df = cv.sets[[i]]$test$df)
+    
+    cv.sets[[i]]$test$df[,factor_columns] = apply(cv.sets[[i]]$test$df[,factor_columns],2, MapToInteger)
+    
+    cv.sets[[i]]$test$model_matrix = as.matrix(cv.sets[[i]]$test$df[,-count_index])
+    
+    cv.sets[[i]]$test$df <- data.frame(count = cv.sets[[i]]$test$df$count)
+    
+    cv.sets[[i]]$test$numlevels = c(apply(cv.sets[[i]]$test$model_matrix[,1:6], 2,
+                                           function(col) length(unique(col))), rep(1,9))
     
     
     # here it's the number of months considered
@@ -491,14 +531,16 @@ GLasso_CV <- function(cv.sets, my.lambda.vals,
                           ncol = length(cv.sets))
   
   for (i in 1:length(cv.sets)) {
-    temp_fit <- glinternet(X = cv.sets[[i]]$train$df[,-which(colnames(cv.sets[[i]]$train$df == "count"))],
+    temp_fit <- glinternet(X = cv.sets[[i]]$train$model_matrix,
                         Y = log(cv.sets[[i]]$train$df$count) - # adjust for months, take logarithm
                           log(cv.sets[[i]]$train$offset.constant),
+                        numLevels = cv.sets[[i]]$train$numlevels,
                         lambda = my.lambda.vals,
                         interactionPairs = my.interactionPairs)
     
     pred_fit <- predict(temp_fit,
-                        newx =df[,-which(colnames(cv.sets[[i]]$test$df == "count"))])
+                        X = cv.sets[[i]]$test$model_matrix,
+                        "response")
     
     temp_err_matr[, i] <- apply(pred_fit, 2,
                                 function(col) RMSEfun(true_vals = cv.sets[[i]]$test$df$count,

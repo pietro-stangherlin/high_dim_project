@@ -33,8 +33,8 @@ OUT.WIDTH.1d = "100%"
 OUT.HEIGHT.1d = "100%"
 
 # plotting parameters 2d plots
-OUT.WIDTH = "100%"
-OUT.HEIGHT = "100%"
+OUT.WIDTH = "80%"
+OUT.HEIGHT = "80%"
 
 source("functions_script.R")
 ```
@@ -83,10 +83,10 @@ df_2011 = read.csv("../../data/final_datasets/arrests_2011_nta.csv", stringsAsFa
 ```
 
 ```{r, message=FALSE, results='hide'}
-df_2010$ARREST_DATE = NULL
-df_2010$YEAR = NULL
-df_2010$Latitude = NULL
-df_2010$Longitude = NULL
+
+to_null_vars = c("ARREST_DATE", "YEAR", "Latitude", "Longitude")
+
+df_2010[,to_null_vars] = NULL
 
 df_2010$NTA2020 = factor(df_2010$NTA2020)
 df_2010$MONTH = factor(df_2010$MONTH)
@@ -107,10 +107,7 @@ nrow(na.omit(df_2010)) / nrow(df_2010)
 df_2010 = na.omit(df_2010)
 
 
-df_2011$ARREST_DATE = NULL
-df_2011$YEAR = NULL
-df_2011$Latitude = NULL
-df_2011$Longitude = NULL
+df_2011[,to_null_vars] = NULL
 
 df_2011$NTA2020 = factor(df_2011$NTA2020)
 df_2011$MONTH = NULL
@@ -143,7 +140,7 @@ Questi dati presentano diverse problematiche.
 
 Le scelte fatte sono dovute a fattori computazionali, di tempo e al fatto che per permettere conteggi diversi da 1 è necessario considerare zone spaziali e intervalli temporali non eccessivamente ristretti.
 
-Per quanto concerne gli intervalli temporali si è scelto di ignorare i possibili trend e considerare i singoli anni, per ciascun anno si sono utilizzati i mesi per la costruzione degli insiemi di convalida incrociata. Pur avendo a disposizione il giorno di ciascun arresto la selezione dei mesi è apparsa come un giusto compromesso per garantire che non tutti i conteggi fossero uguali a 1 che comunque è il conteggio minino e più frequente molto superiore a tutti gli altri conteggi:
+Per quanto concerne gli intervalli temporali si è scelto di ignorare i possibili trend e considerare i singoli anni, per ciascun anno si sono utilizzati i mesi per la costruzione degli insiemi di convalida incrociata. Pur avendo a disposizione il giorno di ciascun arresto la selezione dei mesi è apparsa come un giusto compromesso per garantire che non tutti i conteggi fossero uguali a 1 che comunque è il conteggio minimo e più frequente molto superiore a tutti gli altri conteggi:
 
 ```{r}
 
@@ -183,8 +180,6 @@ Il sottocampionamento è effettuato anche per i dataset completi relativi a 2010
 
 
 ```{r, eval = bool_execute_heavy_chunks, results='hide'}
-
-set.seed(123)
 
 # make a zero count dataframe for each unseen combination of variable values in the original data.
 library(hash)
@@ -281,22 +276,29 @@ df_2011_grouped_subsampled = Subsample_Below_Threshold(df = df_2011_grouped, thr
 
 df_2010_grouped_subsampled_gg = df_2010_grouped_subsampled
 
-df_2010_grouped_subsampled_gg$KY_CD = as.integer(df_2010_grouped_subsampled_gg$KY_CD) %>% MapToInteger()
-df_2010_grouped_subsampled_gg$LAW_CAT_CD = as.integer(df_2010_grouped_subsampled_gg$LAW_CAT_CD) %>% MapToInteger()
-df_2010_grouped_subsampled_gg$AGE_GROUP = as.integer(df_2010_grouped_subsampled_gg$AGE_GROUP) %>% MapToInteger()
-df_2010_grouped_subsampled_gg$PERP_SEX = as.integer(df_2010_grouped_subsampled_gg$PERP_SEX) %>% MapToInteger()
-df_2010_grouped_subsampled_gg$PERP_RACE = as.integer(df_2010_grouped_subsampled_gg$PERP_RACE) %>% MapToInteger()
-df_2010_grouped_subsampled_gg$NTA2020 = as.integer(df_2010_grouped_subsampled_gg$NTA2020) %>% MapToInteger()
-
-
 df_2011_grouped_subsampled_gg = df_2011_grouped_subsampled
 
-df_2011_grouped_subsampled_gg$KY_CD = as.integer(df_2011_grouped_subsampled_gg$KY_CD) %>% MapToInteger()
-df_2011_grouped_subsampled_gg$LAW_CAT_CD = as.integer(df_2011_grouped_subsampled_gg$LAW_CAT_CD) %>% MapToInteger()
-df_2011_grouped_subsampled_gg$AGE_GROUP = as.integer(df_2011_grouped_subsampled_gg$AGE_GROUP) %>% MapToInteger()
-df_2011_grouped_subsampled_gg$PERP_SEX = as.integer(df_2011_grouped_subsampled_gg$PERP_SEX) %>% MapToInteger()
-df_2011_grouped_subsampled_gg$PERP_RACE = as.integer(df_2011_grouped_subsampled_gg$PERP_RACE) %>% MapToInteger()
-df_2011_grouped_subsampled_gg$NTA2020 = as.integer(df_2011_grouped_subsampled_gg$NTA2020) %>% MapToInteger()
+# keep only the rows in 2011 for which the factor variables values are also in 2010
+# i.e we delete rows in 2011 with factor values not present in 2010
+factor_columns <- (1:ncol(df_2010_grouped_subsampled_gg))[sapply(df_2010_grouped_subsampled_gg, is.factor)]
+
+temp_uniques_fact = apply(df_2010_grouped_subsampled_gg[,factor_columns], 2, unique)
+
+
+df_2011_grouped_subsampled_gg = KeepCommon(values_list = temp_uniques_fact,
+                                           my.df = df_2011_grouped_subsampled_gg)
+
+# convert to int coding
+df_2010_grouped_subsampled_gg[,factor_columns] = apply(df_2010_grouped_subsampled_gg[,factor_columns],
+                                                       2,
+                                                       MapToInteger)
+
+df_2011_grouped_subsampled_gg[,factor_columns] = apply(df_2011_grouped_subsampled_gg[,factor_columns],
+                                                       2,
+                                                       MapToInteger)
+
+df_2010_numlevels = c(apply(df_2010_grouped_subsampled_gg[,1:6], 2,
+                                           function(col) length(unique(col))), rep(1,9))
 ```
 
 
@@ -450,11 +452,11 @@ save(month.cv.k4.sets.gg, file = month.cv.k4.sets.gg.name)
 
 ### Esplicative quantitative
 
-IL dataset presenta principalmente esplicative categoriali, benchè le esplicative quantitative (MdAge, MIncome, Pop1) permettano la specificazione di diverse forme funzionali qui, per ragioni computazionali ci si limita ad assumere una relazione monotona lineare con la risposta.
+IL dataset presenta principalmente esplicative categoriali, benchè le esplicative quantitative permettano la specificazione di diverse forme funzionali qui, per ragioni computazionali ci si limita ad assumere una relazione monotona lineare con la risposta.
 
 ### Modelli per risposta continua
 
-Nell'impiego dei modelli con risposta continua (con errori gaussiani i.i.d) si è scelto di stimare il modello su una trasformazione logaritmica della risposta: `y = count / n_month_train` (per i dati senza introduzione di conteggi nulli) e calcolare l'errore di previsioni sulla trasformazione `count = exp(y) * n_month_test` rispetto al numero di conteggi osservati, in questo modo la previsione è sempre positiva.
+Nell'impiego dei modelli con risposta continua (con errori gaussiani i.i.d) si è scelto di adattare il modello su una trasformazione logaritmica della risposta: `y = count / n_month_train` (per i dati senza introduzione di conteggi nulli) e calcolare l'errore di previsioni sulla trasformazione `count = exp(y) * n_month_test` rispetto al numero di conteggi osservati, in questo modo la previsione è sempre positiva.
 
 
 ### Modelli e procedure considerati
@@ -468,6 +470,31 @@ models_summary$lasso <- Lasso_CV(month.cv.k4.sets,
                                         my.lambda.vals = exp(seq(-20, 2, 0.1)) %>% sort(decreasing = T))
 ```
 
+
+
+```{r, eval = bool_execute_heavy_chunks}
+models_summary$gglasso_no_kycd = GLasso_CV(cv.sets = month.cv.k4.sets.gg,
+                                           my.lambda.vals = exp(seq(-10, -5, 0.1)) %>% sort(decreasing = T),
+                                           my.interactionPairs = matrix(c(2,6,
+                                                                          3,6,
+                                                                          4,6,
+                                                                          5,6), byrow = T, ncol = 2))
+
+save(models_summary, file = file_save_name)
+```
+
+
+```{r, eval = bool_execute_heavy_chunks}
+models_summary$gglasso_yes_kycd = GLasso_CV(cv.sets = month.cv.k4.sets.gg,
+                                           my.lambda.vals = exp(seq(-10, -5, 0.1)) %>% sort(decreasing = T),
+                                           my.interactionPairs = matrix(c(1,6,
+                                                                          2,6,
+                                                                          3,6,
+                                                                          4,6,
+                                                                          5,6), byrow = T, ncol = 2))
+
+save(models_summary, file = file_save_name)
+```
 
 ```{r, warning = FALSE, eval = bool_execute_heavy_chunks}
 models_summary$scad = NonConvex_Cv(cv.sets = month.cv.k4.sets,
@@ -666,6 +693,32 @@ TwoParErrPlot(model_list = models_summary$elasticnet.poi.zeros,
 
 
 
+```{r cv-err-lasso-linear-gg, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT, fig.cap="Grafici dell'errore di convalida incrociata in funzione del parametro di regolazione per Grouped LASSO per modelli lineari"}
+
+
+PlotOneDim(x = log(models_summary$gglasso_no_kycd$lambda),
+           y = models_summary$gglasso_no_kycd$cv.err.matr$cv.err,
+           se = models_summary$gglasso_no_kycd$cv.err.matr$cv.se,
+           x.min = log(models_summary$gglasso_no_kycd$lmin),
+           x.1se = log(models_summary$gglasso_no_kycd$l1se),
+           xlab = "log lambda",
+           ylab = "CV error",
+           main = " GL LASSO CV error no KY_CD int",
+          min.leg = "lambda min",
+           onese.leg = "lambda 1se")
+
+PlotOneDim(x = log(models_summary$gglasso_yes_kycd$lambda),
+           y = models_summary$gglasso_yes_kycd$cv.err.matr$cv.err,
+           se = models_summary$gglasso_yes_kycd$cv.err.matr$cv.se,
+           x.min = log(models_summary$gglasso_yes_kycd$lmin),
+           x.1se = log(models_summary$gglasso_yes_kycd$l1se),
+           xlab = "log lambda",
+           ylab = "CV error",
+           main = "GL LASSO CV error yes KY_CD int",
+          min.leg = "lambda min",
+           onese.leg = "lambda 1se")
+```
+
 ```{r}
 # backup to save key model info
 save(models_summary, file = file_save_name)
@@ -807,7 +860,7 @@ models_summary$elasticnet.poi$test_error = RMSEfun(df_2011_grouped_subsampled$co
                                                   type = "response")))
 
 
-# LASSO elasticnet zeros
+# LASSO elasticnet zeros ------------------------
 
 temp.fit = glmnet(x = df_2010_grouped_subsampled.matrix,
                   y = df_2010_grouped_subsampled$count,
@@ -823,6 +876,48 @@ models_summary$elasticnet.poi.zeros$test_error = RMSEfun(df_2011_grouped_subsamp
                                                   newoffset = rep(log(12), nrow(df_2011_grouped_subsampled.matrix),
                                                   type = "response")))
 
+
+# G LASSO ---------------------------------------------
+
+count_index = which(colnames(df_2010_grouped_subsampled_gg) == "count")
+
+temp.fit = glinternet(X = df_2010_grouped_subsampled_gg[,-count_index] %>% as.matrix(),
+                  Y = log(df_2010_grouped_subsampled$count) -log(12),
+                  lambda = models_summary$gglasso_no_kycd$lmin,
+                  numLevels = df_2010_numlevels,
+                  interactionPairs = matrix(c(2,6,
+                                              3,6,
+                                              4,6,
+                                              5,6), byrow = T, ncol = 2))
+
+models_summary$gglasso_no_kycd$beta = coef(temp.fit)[[2]]
+models_summary$gglasso_no_kycd$test_error = RMSEfun(df_2011_grouped_subsampled$count, 
+                                          round(exp(predict(temp.fit,
+                                                            X = df_2011_grouped_subsampled_gg[,-count_index] %>% as.matrix()) +
+                                                      log(12))))
+
+
+# it's not straightforward to extract coefs
+
+# --------------------
+
+temp.fit = glinternet(X = df_2010_grouped_subsampled_gg[,-count_index] %>% as.matrix(),
+                  Y = log(df_2010_grouped_subsampled$count) -log(12),
+                  lambda = models_summary$gglasso_yes_kycd$lmin,
+                  numLevels = df_2010_numlevels,
+                  interactionPairs = matrix(c(1,6,
+                                              2,6,
+                                              3,6,
+                                              4,6,
+                                              5,6), byrow = T, ncol = 2))
+
+models_summary$gglasso_yes_kycd$beta = coef(temp.fit)[[2]]
+models_summary$gglasso_yes_kycd$test_error = RMSEfun(df_2011_grouped_subsampled$count, 
+                                          round(exp(predict(temp.fit, X = df_2011_grouped_subsampled_gg[,-count_index] %>% as.matrix()) + 
+                                                      log(12))))
+
+
+
 # backup to save key model info
 save(models_summary, file = file_save_name)
 
@@ -830,51 +925,9 @@ save(models_summary, file = file_save_name)
 
 
 
-```{r, fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d, warning=FALSE}
-
-# Benchè con la libreria impiegata non siano fornite informazione precise sulla regione delle stime si può comunque provare a valutare la stabilità graficamente.
-# 
-# par(mfrow = c(1,2))
-# 
-# # SCAD ---------------------
-# temp.fit = picasso(X = df_2010_grouped_subsampled.matrix,
-#                   Y = log(df_2010_grouped_subsampled$count) -rep(log(12), nrow(df_2010_grouped_subsampled.matrix)),
-#                   gamma = models_summary$scad$gmin,
-#                   lambda = models_summary$scad$lambda,
-#                   method = "scad")
-# 
-# temp.fit = ncvreg(X = as.matrix(df_2010_grouped_subsampled.matrix),
-#                   y = log(df_2010_grouped_subsampled$count) -rep(log(12), nrow(df_2010_grouped_subsampled.matrix)),
-#                   gamma = models_summary$scad$gmin,
-#                   lambda = models_summary$scad$lambda,
-#                   penalty = "SCAD")
-# 
-# plot(log(temp.fit$lambda), t(temp.fit$beta),
-#              type = "l", main = "SCAD Regularization Path",
-#     xlab = "Regularization Parameter", ylab = "Coefficient")
-# abline(v = log(models_summary$scad$lmin))
-# 
-# # MCP ----------------------
-# temp.fit = picasso(X = df_2010_grouped_subsampled.matrix,
-#                   Y = log(df_2010_grouped_subsampled$count) -rep(log(12), nrow(df_2010_grouped_subsampled.matrix)),
-#                   gamma = models_summary$mcp$gmin,
-#                   lambda = models_summary$mcp$lambda,
-#                   method = "mcp")
-# 
-# matplot(log(temp.fit$lambda), t(temp.fit$beta),
-#         type = "l", main = "MCP Regularization Path",
-#     xlab = "Regularization Parameter", ylab = "Coefficient")
-# abline(v = log(models_summary$mcp$lmin))
-# 
-# par(mfrow = c(1,1))
+```{r}
+models_summary$gglasso_no_kycd$beta
 ```
-
-```{r, results='hide'}
-# suppressMessages(rm(temp.fit))
-# suppressMessages(gc())
-```
-
-
 
 
 ### Modelli migliori
@@ -982,6 +1035,7 @@ Si ricorda che per GLM di Poisson con legame canonico, in assenza di interazioni
 
 ```{r tab-sparsity-ratio, tab.cap="Rapporto del numero di coefficienti non nulli sul numero di coefficienti totali"}
 
+# used for all except grouped lasso
 SparsityRatio = function(vec){
   mean(vec != 0)
 }
