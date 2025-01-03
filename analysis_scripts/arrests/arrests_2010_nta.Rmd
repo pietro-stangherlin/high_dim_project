@@ -8,6 +8,8 @@ output:
 lang: italian
 header-includes:
 - \usepackage{float}
+
+bibliography: references.bib
 ---
 
 
@@ -456,13 +458,18 @@ IL dataset presenta principalmente esplicative categoriali, benchè le esplicati
 
 ### Modelli per risposta continua
 
-Nell'impiego dei modelli con risposta continua (con errori gaussiani i.i.d) si è scelto di adattare il modello su una trasformazione logaritmica della risposta: `y = count / n_month_train` (per i dati senza introduzione di conteggi nulli) e calcolare l'errore di previsioni sulla trasformazione `count = exp(y) * n_month_test` rispetto al numero di conteggi osservati, in questo modo la previsione è sempre positiva.
+Nell'impiego dei modelli con risposta continua (con errori gaussiani i.i.d) si è scelto di adattare il modello su una trasformazione logaritmica della risposta: `y = count / n_month_train` (per i dati senza introduzione di conteggi nulli) e calcolare l'errore di previsioni sulla trasformazione `count = exp(y * n_month_test)` rispetto al numero di conteggi osservati, in questo modo la previsione è sempre positiva.
 
 
 ### Modelli e procedure considerati
 
-I modelli considerati sono modelli normali con penalizzazioni LASSO, Elasticnet, SCAD ed MCP e modelli Poisson con penalizzazioni LASSO ed Elasticnet. Per per tutti i modelli si seleziona il parametro (eventualmente vettoriale) di regolazione che minimizza l'errore di convalida. Per i metodi per cui il parametro di regolarizzazione ha dimensione 2 si definisce una griglia di valori (di cui si riporta il grafico delle curve di livello dell'errore).
-Per i metodi SCAD e MCP, poichè "ncvreg" presenta dei problemi computazionali dovute alle dimensioni del dataset è impiegata la libreria "picasso" che però non fornisce indicazioni rispetto alle regioni non convesse.
+Tra i modelli visti nel corso quelli considerati sono modelli normali con penalizzazioni LASSO, Elasticnet, SCAD ed MCP e modelli Poisson con penalizzazioni LASSO ed Elasticnet. Per per tutti i modelli si seleziona il parametro (eventualmente vettoriale) di regolazione che minimizza l'errore di convalida. Per i metodi per cui il parametro di regolarizzazione ha dimensione 2 si definisce una griglia di valori (di cui si riporta il grafico delle curve di livello dell'errore).
+Per i metodi SCAD e MCP, poichè `ncvreg` presenta dei problemi computazionali dovuti alle dimensioni del dataset è utilizzata la libreria `picasso` ([@picasso]) che però non fornisce indicazioni rispetto alle regioni non convesse delle stime.
+
+Diversamente dai metodi menzionati si considera anche una metodologia specificatamente ideata per selezionare termini di interazione, ovvero la "Hierarchical Group-Lasso Regularization" (HGLR) ([@HGLR]), il Group LASSO standard non è impiegabile in quanto i termini di interazione (per due variabili) dovrebbero appartene agli insiemi di entrambe le variabili.
+
+
+In tutti i casi la matrice delle esplicative è standardizzata prima di adattare il modello.
 
 
 ```{r, eval = bool_execute_heavy_chunks}
@@ -692,8 +699,8 @@ TwoParErrPlot(model_list = models_summary$elasticnet.poi.zeros,
 ```
 
 
-
-```{r cv-err-lasso-linear-gg, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT, fig.cap="Grafici dell'errore di convalida incrociata in funzione del parametro di regolazione per Grouped LASSO per modelli lineari"}
+HGLR presenta la medesima soluzione di $\lambda$ per il valore minimo di errore standard e in entrambi i casi con il criterio a un errore standard il $\lambda$ è tale che tutti i coefficienti siano uguali a zero.
+```{r cv-err-lasso-linear-gg, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT, fig.cap="Grafici dell'errore di convalida incrociata in funzione del parametro di regolazione per Hierarchical Group LASSO per modelli lineari"}
 
 
 PlotOneDim(x = log(models_summary$gglasso_no_kycd$lambda),
@@ -725,7 +732,7 @@ save(models_summary, file = file_save_name)
 ```
 
 
-Per confontare modelli per risposta continua e discreta nelle previsioni sui dati 2011 si approssimano le previsioni continue al primo intero
+Per confontare modelli per risposta continua e discreta nelle previsioni sui dati 2011 si approssimano le previsioni continue al primo intero. Si deve tenere presente che data la particolare procedura per l'elaborazione dei dati questa i risultati relativi a questa metrica devono essere interpretati con cautela.
 
 ```{r, results='hide' ,eval = bool_execute_heavy_chunks, warning=FALSE}
 
@@ -883,17 +890,19 @@ count_index = which(colnames(df_2010_grouped_subsampled_gg) == "count")
 
 temp.fit = glinternet(X = df_2010_grouped_subsampled_gg[,-count_index] %>% as.matrix(),
                   Y = log(df_2010_grouped_subsampled$count) -log(12),
-                  lambda = models_summary$gglasso_no_kycd$lmin,
+                  lambda = models_summary$gglasso_no_kycd$lambda,
                   numLevels = df_2010_numlevels,
                   interactionPairs = matrix(c(2,6,
                                               3,6,
                                               4,6,
                                               5,6), byrow = T, ncol = 2))
 
-models_summary$gglasso_no_kycd$beta = coef(temp.fit)[[2]]
+lmin_index = which(models_summary$gglasso_no_kycd$lambda == models_summary$gglasso_no_kycd$lmin)
+
+models_summary$gglasso_no_kycd$beta = coef(temp.fit)[[lmin_index]]
 models_summary$gglasso_no_kycd$test_error = RMSEfun(df_2011_grouped_subsampled$count, 
                                           round(exp(predict(temp.fit,
-                                                            X = df_2011_grouped_subsampled_gg[,-count_index] %>% as.matrix()) +
+                                                            X = df_2011_grouped_subsampled_gg[,-count_index] %>% as.matrix())[,lmin_index] +
                                                       log(12))))
 
 
@@ -903,7 +912,7 @@ models_summary$gglasso_no_kycd$test_error = RMSEfun(df_2011_grouped_subsampled$c
 
 temp.fit = glinternet(X = df_2010_grouped_subsampled_gg[,-count_index] %>% as.matrix(),
                   Y = log(df_2010_grouped_subsampled$count) -log(12),
-                  lambda = models_summary$gglasso_yes_kycd$lmin,
+                  lambda = models_summary$gglasso_yes_kycd$lambda,
                   numLevels = df_2010_numlevels,
                   interactionPairs = matrix(c(1,6,
                                               2,6,
@@ -911,9 +920,11 @@ temp.fit = glinternet(X = df_2010_grouped_subsampled_gg[,-count_index] %>% as.ma
                                               4,6,
                                               5,6), byrow = T, ncol = 2))
 
-models_summary$gglasso_yes_kycd$beta = coef(temp.fit)[[2]]
+lmin_index = which(models_summary$gglasso_yes_kycd$lambda == models_summary$gglasso_yes_kycd$lmin)
+
+models_summary$gglasso_yes_kycd$beta = coef(temp.fit)[[lmin_index]]
 models_summary$gglasso_yes_kycd$test_error = RMSEfun(df_2011_grouped_subsampled$count, 
-                                          round(exp(predict(temp.fit, X = df_2011_grouped_subsampled_gg[,-count_index] %>% as.matrix()) + 
+                                          round(exp(predict(temp.fit, X = df_2011_grouped_subsampled_gg[,-count_index] %>% as.matrix())[lmin_index] + 
                                                       log(12))))
 
 
@@ -924,15 +935,10 @@ save(models_summary, file = file_save_name)
 ```
 
 
+### Modelli selezionati
 
-```{r}
-models_summary$gglasso_no_kycd$beta
-```
+Si riportano (tabella (\@ref(tab:test-error))) gli errori di previsione sui dati del 2011 (senza zeri) dei vari modelli selezionati tramite convalida incrociata adattati sui dati completi 2010 (senza zeri). La migliore previsione si ha per il modello Poisson con penalità LASSO (selezionato sui dati con gli zeri) per $\lambda$ a errore a un errore standard, mentre il peggiore è sempre il modello di Poisson ma con penalità Elasticnet.
 
-
-### Modelli migliori
-
-Si riportano (tabella (\@ref(tab:test-error))) gli errori di previsione sui dati del 2011 (senza zeri) dei vari modelli migliori stimati sui dati completi 2010 (senza zeri). La migliore previsione si ha per il modello Poisson con penalità LASSO (selezionato sui dati con gli zeri) per $\lambda$ a errore a un errore standard, mentre il peggiore è sempre il modello di Poisson ma con penalità Elasticnet.
 ```{r test-error, tab.cap="Errori di previsione sui dati 2011 dei migliori modelli selezionati tramite convalida incrociata"}
 models.errors = data.frame(model = c("lasso",
                                      "lasso.1se",
@@ -944,7 +950,9 @@ models.errors = data.frame(model = c("lasso",
                                      "poisson_elasticnet",
                                      "poisson_lasso.zeros",
                                      "poisson_lasso.zeros.1se",
-                                     "poisson_elasticnet_zeros"),
+                                     "poisson_elasticnet_zeros",
+                                     "HGLR_no_KY_CD",
+                                     "HGLR_yes_KY_CD"),
                            test_error = c(models_summary$lasso$test_error,
                                           models_summary$lasso$test_error1se,
                                           models_summary$elasticnet$test_error,
@@ -955,7 +963,9 @@ models.errors = data.frame(model = c("lasso",
                                           models_summary$elasticnet.poi$test_error,
                                           models_summary$lasso.poi.zeros$test_error,
                                           models_summary$lasso.poi.zeros$test_error_1se,
-                                          models_summary$elasticnet.poi.zeros$test_error))
+                                          models_summary$elasticnet.poi.zeros$test_error,
+                                          models_summary$gglasso_no_kycd$test_error,
+                                          models_summary$gglasso_yes_kycd$test_error))
 
 kable(models.errors %>% arrange(test_error))
 ```
@@ -964,6 +974,7 @@ kable(models.errors %>% arrange(test_error))
 I grafici dei coefficienti stimati confermano, per LASSO ed Elasticnet non avviene selezione delle variabili.
 Le stime non sono sparse nemmeno con il criterio dell'errore a un errore standard.
 Anche per SCAD ed MCP non avviene selezione di variabili: le stime (non riportate) sono quasi uguali a quelle LASSO ed Elasticnet, non si reputa quindi necessario controllare l'eventuale regione non convessa delle stime (Figura \@ref(fig:fig-beta-lasso-elastic-linear-poi)).
+
 ```{r fig-beta-lasso-elastic-linear-poi,  fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d,fig.cap="Grafici dei coefficienti stimati sui dati 2010 dei modelli selezionati precedentemente per LASSO ed Elasticnet per modelli lineare e Poisson"}
 
 plot(models_summary$lasso$beta, pch = 16,
@@ -989,21 +1000,6 @@ legend("bottomright",
        col = c(1,2),
        lty = 1,
        bty = "n")
-```
-
-
-```{r}
-# plot(models_summary$scad$beta, pch = 16,
-#       main = "SCAD & MCP beta estimates",
-#      xlab = "beta index", ylab = "beta",
-#      ylim = range(c(as.vector(models_summary$scad$beta), as.vector(models_summary$mcp$beta))))
-# points(models_summary$mcp$beta, col = "red")
-# 
-# legend("bottomright",
-#        legend = c("SCAD", "MCP"),
-#        col = c(1,2),
-#        lty = 1,
-#        bty = "n")
 ```
 
 
