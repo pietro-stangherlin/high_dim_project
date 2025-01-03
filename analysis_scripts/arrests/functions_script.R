@@ -6,10 +6,10 @@ library(Matrix)
 library(glmnet)
 library(ncvreg)
 library(picasso) # sparse model matrix scad and mcp
-library(gglasso)
+library(glinternet)
 library(viridis)
 library(hash)
-library(mpath)
+
 
 # Preprocessing -------------------------------------------------
 
@@ -60,6 +60,17 @@ Subsample_Below_Threshold <- function(df, threshold) {
   return(df_above_threshold)
 }
 
+# used to make grouped LASSO data.frame
+MapToInteger = function(vec){
+  vec_uniq = unique(vec)
+  res = rep(NA, length(vec))
+  
+  for(i in 1:length(vec)){
+    res[i] = which(vec_uniq == vec[i]) - 1
+  }
+  
+  return(res)
+}
 
 
 
@@ -154,6 +165,51 @@ MakeMonthCvSets <- function(my_df, month_sets_ind, formula, threshold) {
                                                           data = cv.sets[[i]]$test$df)
     
     cv.sets[[i]]$test$df <- data.frame(count = cv.sets[[i]]$test$df$count)
+    
+    # here it's the number of months considered
+    cv.sets[[i]]$test$offset.constant <- ncol(month_sets_ind)
+    gc()
+  }
+  
+  return(cv.sets)
+}
+
+# Function to create cross-validation sets for grouped lasso
+MakeMonthCvSetsGG <- function(my_df, month_sets_ind, threshold) {
+  cv.sets <- list()
+  
+  for (i in 1:nrow(month_sets_ind)) {
+    # Make sublists
+    train_month_indexes = setdiff(1:12, month_sets_ind[i, ])
+    test_month_indexes = month_sets_ind[i, ]
+    
+    cv.sets[[i]] <- list(train = list(df = NA),
+                         test = list(df = NA))
+    
+    # Populate the sublists
+    cv.sets[[i]]$train$df <- GroupByMONTHSets(mydf = my_df,
+                                              month_indexes = train_month_indexes)
+    
+    cv.sets[[i]]$train$df = Subsample_Below_Threshold(df = cv.sets[[i]]$train$df, threshold = threshold)
+    
+    cv.sets[[i]]$train$df$KY_CD = as.integer(cv.sets[[i]]$train$df$KY_CD) %>% MapToInteger()
+    cv.sets[[i]]$train$df$LAW_CAT_CD = as.integer(cv.sets[[i]]$train$df$LAW_CAT_CD) %>% MapToInteger()
+    cv.sets[[i]]$train$df$AGE_GROUP = as.integer(cv.sets[[i]]$train$df$AGE_GROUP) %>% MapToInteger()
+    cv.sets[[i]]$train$df$PERP_SEX = as.integer(cv.sets[[i]]$train$df$PERP_SEX) %>% MapToInteger()
+    cv.sets[[i]]$train$df$PERP_RACE = as.integer(cv.sets[[i]]$train$df$PERP_RACE) %>% MapToInteger()
+    cv.sets[[i]]$train$df$NTA2020 = as.integer(cv.sets[[i]]$train$df$NTA2020) %>% MapToInteger()
+    
+    
+    # here it's the number of months considered
+    cv.sets[[i]]$train$offset.constant <- length(setdiff(1:12, 1:ncol(month_sets_ind)))
+    
+    
+    cv.sets[[i]]$test$df <- GroupByMONTHSets(mydf = my_df,
+                                             month_indexes = test_month_indexes)
+    
+    cv.sets[[i]]$test$df = Subsample_Below_Threshold(df = cv.sets[[i]]$test$df, threshold = threshold)
+    
+    
     
     # here it's the number of months considered
     cv.sets[[i]]$test$offset.constant <- ncol(month_sets_ind)
@@ -423,23 +479,26 @@ Elastic_Cv <- function(cv.sets,
   return(list_summary)
 }
 
-# general purpuose lasso CV function
+# grouped lasso CV function
 GLasso_CV <- function(cv.sets, my.lambda.vals,
-                      group_index) {
+                      my.interactionPairs = matrix(c(2,6,
+                                                     3,6,
+                                                     4,6,
+                                                     5,6), byrow = T, ncol = 2)) {
   
   temp_err_matr <- matrix(NA, 
                           nrow = length(my.lambda.vals),
                           ncol = length(cv.sets))
   
   for (i in 1:length(cv.sets)) {
-    temp_fit <- gglasso(x = cv.sets[[i]]$train$model_matrix %>% as.matrix,
-                        y = log(cv.sets[[i]]$train$df$count) - # adjust for months, take logarithm
+    temp_fit <- glinternet(X = cv.sets[[i]]$train$df[,-which(colnames(cv.sets[[i]]$train$df == "count"))],
+                        Y = log(cv.sets[[i]]$train$df$count) - # adjust for months, take logarithm
                           log(cv.sets[[i]]$train$offset.constant),
                         lambda = my.lambda.vals,
-                        group = group_index)
+                        interactionPairs = my.interactionPairs)
     
     pred_fit <- predict(temp_fit,
-                        newx = scale(cv.sets[[i]]$test$model_matrix) %>% as.matrix)
+                        newx =df[,-which(colnames(cv.sets[[i]]$test$df == "count"))])
     
     temp_err_matr[, i] <- apply(pred_fit, 2,
                                 function(col) RMSEfun(true_vals = cv.sets[[i]]$test$df$count,

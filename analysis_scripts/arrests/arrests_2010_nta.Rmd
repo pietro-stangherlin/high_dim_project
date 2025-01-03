@@ -53,6 +53,7 @@ load(file_joined_zero_counts_2010_df)
 
 month.cv.k4.sets.name = "rdata/month_cv_set_name.RData"
 month.zeros.cv.k4.sets.name = "rdata/month_zeros_cv_set_name.RData"
+month.cv.k4.sets.gg.name = "rdata/month_cv_set_name_gg.RData"
 
 load(month.cv.k4.sets.name)
 load(month.zeros.cv.k4.sets.name)
@@ -276,6 +277,31 @@ df_2011_grouped_subsampled = Subsample_Below_Threshold(df = df_2011_grouped, thr
 
 
 ```{r}
+# make the data.frame version for grouped lasso: 
+
+df_2010_grouped_subsampled_gg = df_2010_grouped_subsampled
+
+df_2010_grouped_subsampled_gg$KY_CD = as.integer(df_2010_grouped_subsampled_gg$KY_CD) %>% MapToInteger()
+df_2010_grouped_subsampled_gg$LAW_CAT_CD = as.integer(df_2010_grouped_subsampled_gg$LAW_CAT_CD) %>% MapToInteger()
+df_2010_grouped_subsampled_gg$AGE_GROUP = as.integer(df_2010_grouped_subsampled_gg$AGE_GROUP) %>% MapToInteger()
+df_2010_grouped_subsampled_gg$PERP_SEX = as.integer(df_2010_grouped_subsampled_gg$PERP_SEX) %>% MapToInteger()
+df_2010_grouped_subsampled_gg$PERP_RACE = as.integer(df_2010_grouped_subsampled_gg$PERP_RACE) %>% MapToInteger()
+df_2010_grouped_subsampled_gg$NTA2020 = as.integer(df_2010_grouped_subsampled_gg$NTA2020) %>% MapToInteger()
+
+
+df_2011_grouped_subsampled_gg = df_2011_grouped_subsampled
+
+df_2011_grouped_subsampled_gg$KY_CD = as.integer(df_2011_grouped_subsampled_gg$KY_CD) %>% MapToInteger()
+df_2011_grouped_subsampled_gg$LAW_CAT_CD = as.integer(df_2011_grouped_subsampled_gg$LAW_CAT_CD) %>% MapToInteger()
+df_2011_grouped_subsampled_gg$AGE_GROUP = as.integer(df_2011_grouped_subsampled_gg$AGE_GROUP) %>% MapToInteger()
+df_2011_grouped_subsampled_gg$PERP_SEX = as.integer(df_2011_grouped_subsampled_gg$PERP_SEX) %>% MapToInteger()
+df_2011_grouped_subsampled_gg$PERP_RACE = as.integer(df_2011_grouped_subsampled_gg$PERP_RACE) %>% MapToInteger()
+df_2011_grouped_subsampled_gg$NTA2020 = as.integer(df_2011_grouped_subsampled_gg$NTA2020) %>% MapToInteger()
+```
+
+
+
+```{r}
 var_unique_len = apply(df_2010_grouped_subsampled,
                        2,
                        function(col) length(unique(col)))
@@ -299,7 +325,7 @@ nrow(df_2010_grouped_subsampled) / (var_unique_len["NTA2020"] *
 
 ### Criterio di selezione dei parametri di regolazione
 
-Come già accennato, i parametri di regolazione sono selezionati tramite convalida incrociata (CV) impiegando i mesi per la costruzione degli insiemi.
+Come già accennato, i parametri di regolazione sono selezionati tramite convalida incrociata (CV) impiegando i mesi per la costruzione degli insiemi. La funzione di perdita scelta è il RMSE.
 
 La procedura per la costruzione degli insiemi è la seguente:
 
@@ -406,7 +432,18 @@ month.zeros.cv.k4.sets = suppressMessages(MakeMonthCvSetsZeros(my_df = df_2010,
                        formula = FORMULA.YES.INTERACTIONS.sparse,
                        threshold = 10))
 
+
+# gg lasso
+month.cv.k4.sets.gg = suppressMessages(MakeMonthCvSetsGG(my_df = df_2010,
+                       month_sets_ind = month_sets_ind$k4,
+                       threshold = 10))
+
+save(month.cv.k4.sets, file = month.cv.k4.sets.name)
+
 save(month.zeros.cv.k4.sets, file = month.zeros.cv.k4.sets.name)
+
+save(month.cv.k4.sets.gg, file = month.cv.k4.sets.gg.name)
+
 ```
 
 
@@ -418,6 +455,7 @@ IL dataset presenta principalmente esplicative categoriali, benchè le esplicati
 ### Modelli per risposta continua
 
 Nell'impiego dei modelli con risposta continua (con errori gaussiani i.i.d) si è scelto di stimare il modello su una trasformazione logaritmica della risposta: `y = count / n_month_train` (per i dati senza introduzione di conteggi nulli) e calcolare l'errore di previsioni sulla trasformazione `count = exp(y) * n_month_test` rispetto al numero di conteggi osservati, in questo modo la previsione è sempre positiva.
+
 
 ### Modelli e procedure considerati
 
@@ -1090,7 +1128,6 @@ dotchart(KY_CD_betas$beta[order(KY_CD_betas$beta)],
 
 Poichè si è più interessati ai termini correlati positivamente con il numero di arresti si riportano di seguito i 20 coefficienti più grandi del modello Poisson più sparso descritto sopra.
 
-
 Il termine più grande e gli altri due che coinvolgono l'interazione tra NTA e la fascia d'età massima compensano il valore negativo del coefficiente marginale per quella fascia d'età per quelle specifiche zone; un ragionamento analogo vale per i termini di interazione che comprendono la modalità "etnia asiatica" (Figura \@ref(fig:fig-beta-lasso-zeros-interaction))
 
 ```{r fig-beta-lasso-zeros-interaction,fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d,fig.cap="Grafici dei 20 più grandi coefficienti stimati sui dati 2010 del modello Poisson (LASSO) selezionato con criterio a un errore standard sui dati con aggiunta di zeri"}
@@ -1100,8 +1137,19 @@ models_summary$lasso.poi.zeros$beta_big_1se = PlotFirstCoefs(coef_vec = models_s
                   my.main = "LASSO Poisson zeros 1se")
 ```
 
+## Conclusioni 
 
+### Modelli non impiegati
 
+Non sono presenti SCAD ed MCP per verosimiglianza Poisson a causa degli eccessivi tempi computazionali richiesti.
+
+Non si è considerato il Grouped LASSO per problemi computazionali.
+
+Per i dati a disposizione un modello solitamente più appropriato di quello Poisson è la binomiale negativa in quanto permette di allentare le ipotesi sull'uguglianza tra media e varianza; provando metodi di stima penalizzati (per cui l'ulteriore parametro per la sovradispersione è un parametro di regolazione) si sono riscontrati vari problemi, ragion per cui tale modello non è presente.
+
+Per i dati originali sarebbe stato opportuno o modello con inflazione sia di zeri che di uni, ma per adattarlo servirerebbero delle metodologie ad hoc dato l'eccessivo numero di righe e colonne.
+
+### Risultati
 
 
 
