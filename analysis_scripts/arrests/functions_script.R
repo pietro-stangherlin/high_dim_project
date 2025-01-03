@@ -72,6 +72,18 @@ MapToInteger = function(vec){
   return(res)
 }
 
+# sort of inverse of map to integer
+MapToName = function(vec){
+  vec_uniq = unique(vec)
+  res = rep(NA, length(vec))
+  
+  for(i in 1:length(vec)){
+    res[i] = which(vec_uniq == vec[i]) - 1
+  }
+  
+  return(res)
+}
+
 # given a list where each element is a variable name
 # and contains some values for that variables
 # filter the dataframe keeping only rows with values in the list (for each variable)
@@ -868,6 +880,45 @@ ExtractBestPars <- function(sublist) {
     gmin = if ("gmin" %in% names(sublist)) sublist[["gmin"]] else NA,
     tmin = if ("tmin" %in% names(sublist)) sublist[["tmin"]] else NA
   )
+}
+
+
+ExtractBetasMainCat = function(beta_list, vec_names, unique_list){
+  indexes = beta_list[["mainEffects"]][["cat"]]
+  
+  temp_vec = c()
+  temp_names = c()
+  
+  for (ind in 1:length(indexes)){
+    temp_vec = c(temp_vec, as.numeric(beta_list[["mainEffectsCoef"]][["cat"]][[ind]]))
+    temp_names = c(temp_names, paste0(vec_names[indexes[ind]], unique_list[[vec_names[indexes[ind]]]]))
+    
+  }
+  
+  
+  temp_df = cbind(temp_names, temp_vec)
+  
+  return(temp_df)
+  
+}
+
+ExtractBetasMainCont = function(beta_list, vec_names){
+  indexes = beta_list[["mainEffects"]][["cont"]]
+  
+  temp_vec = c()
+  temp_names = c()
+  
+  for (ind in 1:length(indexes)){
+    temp_vec = c(temp_vec, as.numeric(beta_list[["mainEffectsCoef"]][["cont"]][[ind]]))
+    temp_names = c(temp_names, vec_names[indexes[ind]])
+    
+  }
+  
+  
+  temp_df = cbind(temp_names, temp_vec)
+  
+  return(temp_df)
+  
 }
 
 # Plot --------------------------------
