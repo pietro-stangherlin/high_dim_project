@@ -2,12 +2,14 @@
 title: "Arrests 2010 NTA: Analisi"
 output:
   bookdown::pdf_document2:
+    latex_engine: lualatex
     number_sections: false
     fig_caption: true
     lang: italian
 lang: italian
 header-includes:
 - \usepackage{float}
+- \usepackage{amsmath}
 
 bibliography: references.bib
 ---
@@ -174,11 +176,13 @@ La soluzione adottata è basata sul sottocampionamento: si stabilisce una soglia
 
 L'assunzione di fondo è che, almeno per i conteggi fino alla soglia considerata, la frequenza sia descrescente rispetto al valore degli stessi; un aspetto da sottolineare della metodologia proposta, in quanto compromesso, è che introduce distorsione nelle stime.
 
-Si considerano due tipologie di dataset, entrambi impiegano il sottocampiomamento, ma in uno i conteggi nulli sono presenti e nell'altro sono assenti (i modelli per risposta continua sono adattati impiegando una trasformazione logaritmica dei dati senza conteggi nulli).
+Si considerano due tipologie di dataset, entrambi impiegano il sottocampiomamento, ma in uno i conteggi nulli sono presenti (solo per modelli Poisson) e nell'altro sono assenti (modelli per risposta continua e Poisson) (i modelli per risposta continua sono adattati impiegando una trasformazione logaritmica dei dati senza conteggi nulli).
 
 Per questo studio la soglia selezionata che è apparsa ragionevole in base alle considerazioni precedenti è di conteggi uguali a 10.
 
 Il sottocampionamento è effettuato anche per i dataset completi relativi a 2010 e 2011 (escludendo i mesi come variabile di raggruppamento), ma non sono stati aggiunti gli zeri per permettere il confronto tra modelli per risposta continua.
+
+Per tutti i datasets, in particolare per quelli usati per fare convalida incrociata, se una osservazione nell'insieme di verifica presentava una modalità di una variabile qualitativa non presente nel corrispondente insieme di stima allora era rimossa; questa è un ulteriore introduzione di distorsione, alleviata dall'assunzione le osservazioni eliminate avrebbero presentato conteggi molto bassi e quindi potenzialmente soggette al sottocampionamento.
 
 
 ```{r, eval = bool_execute_heavy_chunks, results='hide'}
@@ -261,9 +265,8 @@ save(joined_zero_counts_2010_df, file = file_joined_zero_counts_2010_df)
 ### Elevata dimensionalità
 
 I dati presentano elevata dimensionalità considerando le interazioni tra la variabile spaziale (NTA) e le covariate (qualitative) di arrests.
-E' comunque interessante provare i metodi di selezione delle variabili anche sui dati senza interazioni.
 
-Per avere delle misure quantitative si considera il dataset in cui si sono definiti i conteggi senza considerare i mesi: si riporta il rapporto tra il numero di osservazioni (righe) e il prodotto tra il numero di modalità di NTA e la somma delle modalità delle variabili qualitative di arrests.
+Per avere delle misure quantitative del rapporto tra osservazioni e colonne si considera il dataset in cui si sono definiti i conteggi senza considerare i mesi: si riporta il rapporto tra il numero di osservazioni (righe) e il prodotto tra il numero di modalità di NTA e la somma delle modalità delle variabili qualitative di arrests.
 
 ```{r}
 set.seed(123)
@@ -333,7 +336,7 @@ Come già accennato, i parametri di regolazione sono selezionati tramite convali
 
 La procedura per la costruzione degli insiemi è la seguente:
 
-- Selezione di k: il numero di insiemi di convalida (ad esempio k = 4)
+- Selezione di k: il numero di insiemi di convalida (si sceglie k = 4)
 - Ogni insieme di convalida è composto da osservazioni raggruppate di 12 / k (3) mesi e i mesi rimanenti (9) vengono utilizzati per adattare il modello.
 - Per cercare di compensare e mediare le fluttuazioni stagionali, i mesi di validazione sono scelti il più distanziati possibile. Ad esempio, nel caso di k = 4, il primo insieme di validazione è (gennaio, maggio, settembre), il secondo set è (febbraio, giugno, ottobre), il terzo è (marzo, luglio, novembre) e il quarto è (aprile, agosto, dicembre).
 - Per rendere ogni risposta comparabile avendo utilizzato un numero diverso di mesi, una nuova risposta è definita come il rapporto degli arresti diviso per il numero di mesi utilizzati nel raggruppamento (ovvero l'esponenziale dell 'offset nel modello di Poisson).
@@ -342,14 +345,14 @@ La procedura per la costruzione degli insiemi è la seguente:
 ```{r}
 # months indexes sets
 # each list contains a matrix where each row contains the used indexes
-month_sets_ind = list(k4 = matrix(c(1, 5, 9,
+month_sets_ind = list(k4 = matrix(c(1, 5, 9, # used
                                     2, 6, 10,
                                     3, 7, 11,
                                     4, 8, 12),
                                   byrow = T,
                                   nrow = 4),
                       
-                      k6 = matrix(c(1, 7,
+                      k6 = matrix(c(1, 7, # no used
                                     2, 8,
                                     3, 9,
                                     4, 10,
@@ -398,8 +401,6 @@ gc()
 
 Poichè la matrice del modello dell'insieme di verifica e quella dell'insieme di stima non condividono tutte le colonne si considerare solo le colonne in comune alle due.
 ```{r}
-
-
 # check dimensions
 dim(df_2010_grouped_subsampled.matrix)
 dim(df_2011_grouped_subsampled.matrix)
@@ -466,11 +467,38 @@ Nell'impiego dei modelli con risposta continua (con errori gaussiani i.i.d) si �
 Tra i modelli visti nel corso quelli considerati sono modelli normali con penalizzazioni LASSO, Elasticnet, SCAD ed MCP e modelli Poisson con penalizzazioni LASSO ed Elasticnet. Per per tutti i modelli si seleziona il parametro (eventualmente vettoriale) di regolazione che minimizza l'errore di convalida. Per i metodi per cui il parametro di regolarizzazione ha dimensione 2 si definisce una griglia di valori (di cui si riporta il grafico delle curve di livello dell'errore).
 Per i metodi SCAD e MCP, poichè `ncvreg` presenta dei problemi computazionali dovuti alle dimensioni del dataset è utilizzata la libreria `picasso` ([@picasso]) che però non fornisce indicazioni rispetto alle regioni non convesse delle stime.
 
-Diversamente dai metodi menzionati si considera anche una metodologia specificatamente ideata per selezionare termini di interazione, ovvero la "Hierarchical Group-Lasso Regularization" (HGLR) ([@HGLR]), il Group LASSO standard non è impiegabile in quanto i termini di interazione (per due variabili) dovrebbero appartene agli insiemi di entrambe le variabili.
+#### HGLR
+
+Diversamente dai metodi menzionati si considera anche una metodologia specificatamente ideata per selezionare termini di interazione, ovvero la "Hierarchical Group-Lasso Regularization" (HGLR) ([@HGLR]), il Group LASSO standard non è impiegabile in quanto i termini di interazione (per due variabili) dovrebbero appartene agli insiemi di entrambe le variabili. La libreria associata all'articolo non implementa il modello Poisson o Binomiale Negativo, quindi è usata solo assumendo risposta continua gaussiana.
+
+Si introduce brevemente la procedura usando la medesima notazione adottata nell'articolo. Il metodo utilizza il Group LASSO per imporre una struttura gerarchica degli effetti di interazione ovvero l'usuale imposizione che una interazione sia presente solo se sono presenti i relativi effetti principali.
+
+Assumendo il caso semplice in cui $\mathbf{X}_{1}$ e $\mathbf{X}_{1}$ sono matrici di indicatrici per due variabili categoriali e $\mathbf{X}_{1: 2}$ sia la corrispondente matrice di interazione.
 
 
-In tutti i casi la matrice delle esplicative è standardizzata prima di adattare il modello.
+Si trovano i parametri $\mu, \alpha, \tilde{\alpha}$ minimizzando:
+$$
+\frac{1}{2}\left\|\mathbf{Y}-\mu \cdot \mathbf{1}-\mathbf{X}_{1} \alpha_{1}-\mathbf{X}_{2} \alpha_{2}-\left[\mathbf{X}_{1} \mathbf{X}_{2} \mathbf{X}_{1: 2}\right]\left[\begin{array}{c}
+\tilde{\alpha}_{1} \\
+\tilde{\alpha}_{2} \\
+\alpha_{1: 2}
+\end{array}\right]\right\|_{2}^{2} \\
++\lambda\left(\left\|\alpha_{1}\right\|_{2}+\left\|\alpha_{2}\right\|_{2}+\sqrt{L_{2}\left\|\tilde{\alpha}_{1}\right\|_{2}^{2}+L_{1}\left\|\tilde{\alpha}_{2}\right\|_{2}^{2}+\left\|\alpha_{1: 2}\right\|_{2}^{2}}\right)
+$$
 
+soggetto a 
+$$
+\sum_{i=1}^{L_{1}} \alpha_{1}^{i}=0, \quad \sum_{j=1}^{L_{2}} \alpha_{2}^{j}=0, \quad \sum_{i=1}^{L_{1}} \tilde{\alpha}_{1}^{i}=0, \quad \sum_{j=1}^{L_{2}} \tilde{\alpha}_{2}^{j}=0 \sum_{i=1}^{L_{1}} \alpha_{1: 2}^{i j}=0, \quad \sum_{j=1}^{L_{2}} \alpha_{1: 2}^{i j}=0
+$$
+
+Si nota che il coefficiente degli effetti principali stimato per la prima variabile è $\hat{\theta}_{1} =\hat{\alpha}_{1}+\hat{\tilde{\alpha}}_{1}$ e in modo analogo per la seconda variabile $\hat{\theta}_{2} =\hat{\alpha}_{2}+\hat{\tilde{\alpha}}_{2}$.
+
+Si può mostrare che il problema precedente è equivalente ad un problema di ottimizzazione Group LASSO senza vincoli sulle somme a zero e senza "sovrapposizione" di coefficienti
+
+
+#### Standardizzazione
+
+In tutti i casi la matrice delle esplicative è standardizzata prima di adattare il modello, ma per HGLR sono standardizzate solo le esplicative continue, per cambiare questa opzione si dovrebbe modificare il codice, eventualità che non considerata per motivi di tempo.
 
 ```{r, eval = bool_execute_heavy_chunks}
 models_summary$lasso <- Lasso_CV(month.cv.k4.sets,
@@ -754,6 +782,7 @@ models_summary$lasso$test_error1se = RMSEfun(df_2011_grouped_subsampled$count,
                                           round(exp(predict(temp.fit, newx = df_2011_grouped_subsampled.matrix) + log(12))))
 
 # Elasticnet ---------------------
+
 temp.fit = glmnet(x = df_2010_grouped_subsampled.matrix,
                   y = log(df_2010_grouped_subsampled$count) -log(12),
                   alpha = models_summary$elasticnet$amin,
@@ -924,6 +953,12 @@ temp_df = rbind(beta_df_cat, beta_df_cont)
 
 models_summary$gglasso_no_kycd$beta_df = rbind(beta_df_cat, beta_df_cont)
 
+temp_names = models_summary$gglasso_no_kycd$beta_df[,1]
+temp_vals = as.numeric(models_summary$gglasso_no_kycd$beta_df[,2])
+
+models_summary$gglasso_no_kycd$beta_df = data.frame(name = temp_names,
+                                                    vals = temp_vals)
+
 # zero interaction terms
 
 # --------------------
@@ -950,6 +985,12 @@ beta_df_cont = ExtractBetasMainCont(models_summary$gglasso_yes_kycd$beta, cont_n
 temp_df = rbind(beta_df_cat, beta_df_cont)
 
 models_summary$gglasso_yes_kycd$beta_df = rbind(beta_df_cat, beta_df_cont)
+
+temp_names = models_summary$gglasso_yes_kycd$beta_df[,1]
+temp_vals = as.numeric(models_summary$gglasso_yes_kycd$beta_df[,2])
+
+models_summary$gglasso_yes_kycd$beta_df = data.frame(name = temp_names,
+                                                    vals = temp_vals)
 
 # zero interaction terms
 
@@ -1046,9 +1087,9 @@ legend("bottomright",
 
 
 La tabella (\@ref(tab:tab-sparsity-ratio)) contiene per ciascun modello il rapporto tra il numero di elementi non nulli e il numero di elementi totali del vettore dei coefficienti.
-Il metodo HGLR non seleziona nessun termine di interazione. I coefficienti selezionati sono relativi alle variabili `PERP_RACE`, `WNHP`, `BNHP` e sono più piccoli di quelli per gli altri modelli, cioè può essere in parte dovuto al fatto che `glinternet` standardizzi solo colonne relative alle variabili continue, mentre negli altri casi tutte le colonne sono standarizzate, quindi i coefficienti non sono propriamente comparabili. E' comunque interessante notare come tutte le variabili selezionate siano relative all'etnia (dell'arrestato e di stratificazione); secondo il modello i conteggi presentano correlazione positiva con popolazione di etnia nera e etnia dell'arrestato nera e bianca / ispanica.
-```{r}
-models_summary$gglasso_no_kycd$beta_df
+Il metodo HGLR non seleziona nessun termine di interazione (\@ref(tab:gg-lasso-beta)). I coefficienti selezionati sono relativi alle variabili `PERP_RACE`, `WNHP`, `BNHP` e sono più piccoli di quelli per gli altri modelli, cioè può essere in parte dovuto al fatto che `glinternet` standardizzi solo colonne relative alle variabili continue, mentre negli altri casi tutte le colonne sono standarizzate, quindi i coefficienti non sono propriamente comparabili. E' comunque interessante notare come tutte le variabili selezionate siano relative all'etnia (dell'arrestato e di stratificazione); secondo il modello i conteggi presentano correlazione positiva con popolazione di etnia nera e etnia dell'arrestato nera e bianca / ispanica.
+```{r gg-lasso-beta, tab.cap="Coefficienti selezionati per il metodo HGLR"}
+models_summary$gglasso_no_kycd$beta_df %>% kable
 ```
 
 
@@ -1244,6 +1285,7 @@ Per i dati originali sarebbe stato opportuno un modello con inflazione sia di ze
 
 La metodologia HGLR non ha selezionato termini di interazione e gli altri modelli stimati non sono sparsi, quindi in questo caso l'obbiettivo di selezionare particolari termini di interazione non è stato pienamente raggiunto. Si è mostrato come questa particolare tipologia di dati, pur impiegando molte semplificazioni è risultata difficile da analizzare con i metodi a disposizione, sarebbe quindi opportuno indagare o sviluppare opportuni approcci per queste analisi.
 
+## Bibliografia
 
 
 
