@@ -464,7 +464,9 @@ Nell'impiego dei modelli con risposta continua (con errori gaussiani i.i.d) si �
 
 ### Modelli e procedure considerati
 
-Tra i modelli visti nel corso quelli considerati sono modelli normali con penalizzazioni LASSO, Elasticnet, SCAD ed MCP e modelli Poisson con penalizzazioni LASSO ed Elasticnet. Per per tutti i modelli si seleziona il parametro (eventualmente vettoriale) di regolazione che minimizza l'errore di convalida. Per i metodi per cui il parametro di regolarizzazione ha dimensione 2 si definisce una griglia di valori (di cui si riporta il grafico delle curve di livello dell'errore).
+E' risaputo dalla teoria che, almeno per il LASSO, la selezione delle vere variabili necessita una bassa correlazione tra le vere esplicative e le rimanenti; nel caso delle interazioni, benchè per variabili qualitative (la correlazione è definita per variabili quantitative), questa assunzione non è realistica. Si vuole comunque provare a vedere il comportamento delle metodologie viste a in classe a cui è affiancato un metodo appositamente ideato per individuare interazioni.
+
+Tra i modelli visti nel corso quelli considerati sono modelli normali con penalizzazioni LASSO, Elasticnet, SCAD ed MCP e modelli Poisson con penalizzazioni LASSO ed Elasticnet. Per tutti i modelli si seleziona il parametro (eventualmente vettoriale) di regolazione che minimizza l'errore di convalida. Per i metodi per cui il parametro di regolarizzazione ha dimensione 2 si definisce una griglia di valori (di cui si riporta il grafico delle curve di livello dell'errore).
 Per i metodi SCAD e MCP, poichè `ncvreg` presenta dei problemi computazionali dovuti alle dimensioni del dataset è utilizzata la libreria `picasso` ([@picasso]) che però non fornisce indicazioni rispetto alle regioni non convesse delle stime.
 
 #### HGLR
