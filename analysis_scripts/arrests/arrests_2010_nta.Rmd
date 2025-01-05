@@ -30,8 +30,12 @@ source("functions_script.R")
 # Condizione: se TRUE esegui i blocchi computazionalmente pesanti, altrimenti no
 # assumendo che i modelli siano stati caricati da un file RData precedentemente.
 # IMPORTANTE: per riprodurre il risultato, imposta bool_execute_heavy_chunks = TRUE
-
 bool_execute_heavy_chunks = FALSE
+
+# standardize only quantitative variables
+standardize_only_quant_bool = FALSE
+
+
 file_save_name = "rdata/arrests_nta_2010_models_summary.Rdata"
 load(file_save_name)
 
@@ -46,18 +50,7 @@ load(month.cv.k4.sets.name)
 load(month.zeros.cv.k4.sets.name)
 load(month.cv.k4.sets.gg.name)
 
-# best models fitted on all data
-# estimated_best_models = TRUE
-# models_fitted_file_name = "models_fitted_nta_2010.Rdata"
-# 
-# # require loading models_summary list
-# if(!estimated_best_models){
-#   load(models_fitted_file_name)
-# } else{
-#   # store each model useful information:
-#   # validation error and beta for best lambda
-#   models_fitted_file_name = list()
-# }
+
 ```
 
 ```{r}
@@ -114,6 +107,20 @@ nrow(na.omit(df_2011)) / nrow(df_2011)
 # delete missing values
 df_2011 = na.omit(df_2011)
 ```
+
+
+```{r, results='hide'}
+# if quant variables standardization
+
+quant_var_names = c("Pop1","MaleP","MdAge","Hsp1P", "WNHP", "BNHP", "ANHP", "OthNHP", "MIncome")
+
+if(standardize_only_quant_bool){
+  df_2010[, quant_var_names] = apply(df_2010[, quant_var_names], 2, function(col) ((col - mean(col)) / sd(col)) )
+  df_2011[, quant_var_names] = apply(df_2011[, quant_var_names], 2, function(col) ((col - mean(col)) / sd(col)) )
+}
+
+```
+
 
 L'obiettivo di questa sezione di analisi è verificare se esiste un sottoinsieme di variabili esplicative particolarmente correlate con il numero di arresti, sia marginalmente che considerando l'interazione con ciascuna zona spaziale (NTA).
 Per vincoli computazionali abbiamo ridotto l'insieme di stima al solo anno 2010: per quest'anno i dati del censo sono esatti e non si sono verificati eventi rari a differenza del 2020 (Pandemia COVID-19); l'insieme di verifica scelto è l'anno 2011, in quanto è l'anno più vicino al 2010 (l'assunzione è che i due anni siano abbastanza simili per il fenomeno considerato).
@@ -438,7 +445,8 @@ In tutti i casi la matrice delle esplicative è standardizzata prima di adattare
 
 ```{r, eval = bool_execute_heavy_chunks}
 models_summary$lasso <- Lasso_CV(month.cv.k4.sets,
-                                        my.lambda.vals = exp(seq(-20, 2, 0.1)) %>% sort(decreasing = T))
+                                        my.lambda.vals = exp(seq(-20, 2, 0.1)) %>% sort(decreasing = T),
+                                 my.standardize.bool = standardize_only_quant_bool)
 ```
 
 ```{r, eval = bool_execute_heavy_chunks}
@@ -468,7 +476,8 @@ save(models_summary, file = file_save_name)
 models_summary$scad = NonConvex_Cv(cv.sets = month.cv.k4.sets,
                                              my.lambda.vals = exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE),
                                              my.gamma.vals = seq(2+1e-05, 20, length = 10),
-                                         my.penalty = "scad")
+                                         my.penalty = "scad",
+                                   my.standardize.bool = standardize_only_quant_bool)
 
 # backup to save key model info
 save(models_summary, file = file_save_name)
@@ -479,7 +488,8 @@ save(models_summary, file = file_save_name)
 models_summary$mcp = NonConvex_Cv(cv.sets = month.cv.k4.sets,
                                              my.lambda.vals = exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE),
                                              my.gamma.vals = seq(1+1e-05, 20, length = 10),
-                                         my.penalty = "mcp")
+                                         my.penalty = "mcp",
+                                  my.standardize.bool = standardize_only_quant_bool)
 
 # backup to save key model info
 save(models_summary, file = file_save_name)
@@ -489,7 +499,8 @@ save(models_summary, file = file_save_name)
 
 models_summary$elasticnet = Elastic_Cv(cv.sets = month.cv.k4.sets,
                                              my.lambda.vals = exp(seq(-20, 2, 0.3)) %>% sort(decreasing = TRUE),
-                                             my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 10))
+                                             my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 10),
+                                       my.standardize.bool = standardize_only_quant_bool)
 
 # backup to save key model info
 save(models_summary, file = file_save_name)
@@ -503,7 +514,8 @@ glmnet.control(mxitnr = 50) # increase maximum no. of IRLS iterations allowed
 ```{r, eval = bool_execute_heavy_chunks, warning=FALSE}
 models_summary$lasso.poi = Lasso_Offset_CV(cv.sets = month.cv.k4.sets,
                                           my.lambda.vals = exp(seq(-15, 3, 0.1)) %>% sort(decreasing = TRUE),
-                                          my.family = poisson())
+                                          my.family = poisson(),
+                                          my.standardize.bool = standardize_only_quant_bool)
 
 # backup to save key model info
 save(models_summary, file = file_save_name)
@@ -512,7 +524,8 @@ save(models_summary, file = file_save_name)
 ```{r, eval = bool_execute_heavy_chunks, warning=FALSE}
 models_summary$lasso.poi.zeros = Lasso_Offset_CV(cv.sets = month.zeros.cv.k4.sets,
                                           my.lambda.vals = exp(seq(-15, 3, 0.1)) %>% sort(decreasing = TRUE),
-                                          my.family = poisson())
+                                          my.family = poisson(),
+                                          my.standardize.bool = standardize_only_quant_bool)
 
 # backup to save key model info
 save(models_summary, file = file_save_name)
@@ -522,7 +535,8 @@ save(models_summary, file = file_save_name)
 models_summary$elasticnet.poi = Elastic_Offset_Cv(cv.sets = month.cv.k4.sets,
                                                         my.lambda.vals = exp(seq(-10, 2, 0.2)) %>% sort(decreasing = TRUE),
                                                         my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 10),
-                                                        my.family = poisson())
+                                                        my.family = poisson(),
+                                                  my.standardize.bool = standardize_only_quant_bool)
 
 save(models_summary, file = file_save_name)
 ```
@@ -531,7 +545,8 @@ save(models_summary, file = file_save_name)
 models_summary$elasticnet.poi.zeros = Elastic_Offset_Cv(cv.sets = month.zeros.cv.k4.sets,
                                                         my.lambda.vals = exp(seq(-10, 2, 0.2)) %>% sort(decreasing = TRUE),
                                                         my.alpha.vals = seq(1e-5, 1 - 1e-5, length = 10),
-                                                        my.family = poisson())
+                                                        my.family = poisson(),
+                                                        my.standardize.bool = standardize_only_quant_bool)
 
 # backup to save key model info
 save(models_summary, file = file_save_name)

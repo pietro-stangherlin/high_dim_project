@@ -443,7 +443,8 @@ TwoParErrPlot = function(model_list,
 # CV Functions -------------------------------------------
 # general purpuose lasso CV function
 Lasso_CV <- function(cv.sets,
-                     my.lambda.vals) {
+                     my.lambda.vals,
+                     my.standardize.bool = TRUE) {
   
   temp_err_matr <- matrix(NA, 
                           nrow = length(my.lambda.vals),
@@ -454,7 +455,8 @@ Lasso_CV <- function(cv.sets,
                        y = log(cv.sets[[i]]$train$df$count) - # adjust for months, take logarithm
                          log(cv.sets[[i]]$train$offset.constant),
                        alpha = 1,
-                       lambda = my.lambda.vals)
+                       lambda = my.lambda.vals,
+                       standardize = my.standardize.bool)
     
     pred_fit <- predict(temp_fit,
                         newx = cv.sets[[i]]$test$model_matrix)
@@ -498,7 +500,8 @@ Lasso_CV <- function(cv.sets,
 # general purpuose elasticnet CV function
 Elastic_Cv <- function(cv.sets,
                        my.lambda.vals, # decreasing sorted
-                       my.alpha.vals) {
+                       my.alpha.vals,
+                       my.standardize.bool = TRUE) {
   
   temp.err.array <- array(NA,
                           dim = c(length(my.lambda.vals),
@@ -515,7 +518,8 @@ Elastic_Cv <- function(cv.sets,
                          y = log(cv.sets[[k]]$train$df$count) - # adjust for months and population, take logarithm
                            log(cv.sets[[k]]$train$offset.constant),
                          alpha = my.alpha.vals[j],
-                         lambda = my.lambda.vals)
+                         lambda = my.lambda.vals,
+                         standardize = my.standardize.bool)
       
       pred_fit <- predict(temp_fit,
                           newx = cv.sets[[k]]$test$model_matrix)
@@ -635,7 +639,8 @@ my.predict.gaussian = function (object, newdata, lambda.idx = c(1:3),
 NonConvex_Cv <- function(cv.sets,
                          my.lambda.vals, # decreasing sorted
                          my.gamma.vals,
-                         my.penalty = "mcp") {
+                         my.penalty = "mcp",
+                         my.standardize.bool = TRUE) {
   
   temp.err.array <- array(NA,
                           dim = c(length(my.lambda.vals),
@@ -661,7 +666,8 @@ NonConvex_Cv <- function(cv.sets,
                            log(cv.sets[[k]]$train$offset.constant),
                          method = my.penalty,
                          gamma = my.gamma.vals[j],
-                         lambda = my.lambda.vals)
+                         lambda = my.lambda.vals,
+                         standardize = my.standardize.bool)
       
       # pred_fit <- predict(temp_fit,
       #                     X = as.matrix(cv.sets[[k]]$test$model_matrix))
@@ -714,7 +720,8 @@ NonConvex_Cv <- function(cv.sets,
 #' @param my.offset_var_name (char): take the log and add to train fold offset (assumed is a variable in cv sets)
 Lasso_Offset_CV <- function(cv.sets,
                             my.lambda.vals,
-                            my.family = poisson()) {
+                            my.family = poisson(),
+                            my.standardize.bool = TRUE) {
   
   temp_err_matr <- matrix(NA, 
                           nrow = length(my.lambda.vals),
@@ -726,7 +733,8 @@ Lasso_Offset_CV <- function(cv.sets,
                        alpha = 1,
                        lambda = my.lambda.vals,
                        family = my.family,
-                       offset = rep(log(cv.sets[[i]]$train$offset.constant), nrow(cv.sets[[i]]$train$df)) )
+                       offset = rep(log(cv.sets[[i]]$train$offset.constant), nrow(cv.sets[[i]]$train$df)),
+                       standardize = my.standardize.bool)
     
     pred_fit <- predict(temp_fit,
                         newx = cv.sets[[i]]$test$model_matrix,
@@ -772,7 +780,8 @@ Lasso_Offset_CV <- function(cv.sets,
 Elastic_Offset_Cv <- function(cv.sets,
                               my.lambda.vals,
                               my.alpha.vals,
-                              my.family = poisson()) {
+                              my.family = poisson(),
+                              my.standardize.bool = TRUE) {
   
   temp.err.array <- array(NA,
                           dim = c(length(my.lambda.vals),
@@ -790,7 +799,8 @@ Elastic_Offset_Cv <- function(cv.sets,
                          alpha = my.alpha.vals[j],
                          lambda = my.lambda.vals,
                          family = my.family,
-                         offset = rep(log(cv.sets[[k]]$train$offset.constant), nrow(cv.sets[[k]]$train$df)))
+                         offset = rep(log(cv.sets[[k]]$train$offset.constant), nrow(cv.sets[[k]]$train$df)),
+                         standardize = my.standardize.bool)
       
       pred_fit <- predict(temp_fit,
                           newx = cv.sets[[k]]$test$model_matrix,
