@@ -353,24 +353,23 @@ PlotOneDim = function(x, y, se,
        main = main,
        pch = 16,
        type = "b")
-  
+
   points(x, y + se, type = "l", col = "red")
   points(x, y - se, type = "l", col = "red")
-  
+
   # min
   abline(v = x.min, lty = 2, col = "blue", lwd = 2)
-  
+
   # 1.se min
   abline(v = x.1se,
          lty = 2, col = "purple", lwd = 2)
-  
-  
+
+
   legend("topleft",
          legend = c(min.leg, onese.leg, "se"),
          col = c("blue", "purple", "red"),
          lwd = c(2, 2, 1),
          lty = c(2, 2, 1))
-  
 }
 
 # generic two parameters error plots
@@ -389,26 +388,55 @@ TwoParErrPlot = function(model_list,
   n_row = length(model_list[[row_par_name]])
   
   # sort rows in z by increasing order to match that of lambda_vals (as required by filled.contours)
-  filled.contour(x = log(model_list[[row_par_name]]) %>% sort(),
-                 y = model_list[[col_par_name]],
-                 z = model_list[[cv_err_matr_name]][(1:n_row) %>% sort(decreasing = TRUE),],
-                 main = my.main,
-                 xlab = my.xlab,
-                 ylab = my.ylab,
-                 color.palette = viridis::viridis,
-                 nlevels = 200,
-                 plot.axes = { 
-                   axis(1)
-                   axis(2)
-                   points(log(model_list[[row_par_min_name]]), model_list[[col_par_min_name]],
-                          col = "red", pch = 19, cex = 1.5)})
+  # filled.contour(x = log(model_list[[row_par_name]]) %>% sort(),
+  #                y = model_list[[col_par_name]],
+  #                z = model_list[[cv_err_matr_name]][(1:n_row) %>% sort(decreasing = TRUE),],
+  #                main = my.main,
+  #                xlab = my.xlab,
+  #                ylab = my.ylab,
+  #                color.palette = viridis::viridis,
+  #                nlevels = 200,
+  #                plot.axes = { 
+  #                  axis(1)
+  #                  axis(2)
+  #                  points(log(model_list[[row_par_min_name]]), model_list[[col_par_min_name]],
+  #                         col = "red", pch = 19, cex = 1.5)})
+  # 
+  # 
+  # legend("topleft",
+  #        legend = c("min err"),
+  #        col = "red",
+  #        text.col = "red",
+  #        lty = 1,
+  #        bty = "n")
+  x = log(model_list[[row_par_name]]) %>% sort()
+  y = model_list[[col_par_name]]
+  z = model_list[[cv_err_matr_name]][(1:n_row) %>% sort(decreasing = TRUE), ]
   
-  legend("topleft",
-         legend = c("min err"),
-         col = "red",
-         text.col = "red",
-         lty = 1,
-         bty = "n")
+  grid_data = expand.grid(x = x, y = y) %>%
+    mutate(z = as.numeric(as.vector(z)))
+  
+  min_point = data.frame(
+    x = log(model_list[[row_par_min_name]]),
+    y = model_list[[col_par_min_name]]
+  )
+  
+  ggplot(grid_data, aes(x = x, y = y, z = z)) +
+    geom_contour_filled() +
+    scale_fill_viridis_d() +
+    geom_point(data = min_point, aes(x = x, y = y), color = "red", size = 3, inherit.aes = F) +
+    annotate("text", x = min(min_point$x), y = max(min_point$y), 
+             label = "min err", color = "red", hjust = 0, vjust = 1.5) +
+    labs(
+      title = my.main,
+      x = my.xlab,
+      y = my.ylab,
+      fill = "Error Level"
+    ) +
+    theme_minimal() +
+    theme(
+      legend.position = "right"
+    )
 }
 
 

@@ -1,0 +1,33 @@
+---
+title: "Arrests 2010 NTA: Analisi"
+output:
+  bookdown::pdf_document2:
+    latex_engine: lualatex
+    number_sections: false
+    fig_caption: true
+    lang: italian
+lang: italian
+header-includes:
+- \usepackage{float}
+- \usepackage{amsmath}
+
+bibliography: references.bib
+---
+
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(fig.align = 'center')
+
+library(bookdown)
+library(knitr)
+
+library(gridExtra)
+library(sf)
+library(ggplot2)
+```
+
+```{r child = 'arrests_2010_nta.Rmd'}
+```
+
+## Bibliografia

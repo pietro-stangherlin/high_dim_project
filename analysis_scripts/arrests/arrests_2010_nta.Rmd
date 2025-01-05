@@ -1,36 +1,8 @@
----
-title: "Arrests 2010 NTA: Analisi"
-output:
-  bookdown::pdf_document2:
-    latex_engine: lualatex
-    number_sections: false
-    fig_caption: true
-    lang: italian
-lang: italian
-header-includes:
-- \usepackage{float}
-- \usepackage{amsmath}
-
-bibliography: references.bib
----
-
-
 # Analisi NTA 2010 - 2011 interazione tra variabili
-
-```{r setup, include = FALSE}
-knitr::opts_chunk$set(echo = FALSE)
-knitr::opts_chunk$set(fig.align = 'center')
-
-library(bookdown)
-library(knitr)
-```
 
 ```{r, message=FALSE, warning=FALSE, results='hide'}
 rm(list = ls())
 gc(verbose = FALSE)
-library(gridExtra)
-library(sf)
-library(ggplot2)
 
 # plotting parameters 1d plot
 OUT.WIDTH.1d = "100%"
@@ -1272,7 +1244,7 @@ models_summary$lasso.poi.zeros$beta_big_1se = PlotFirstCoefs(coef_vec = models_s
                   my.main = "LASSO Poisson zeros 1se")
 ```
 
-## Conclusioni 
+## Conclusioni di sezione
 
 ### Modelli non impiegati
 
@@ -1286,8 +1258,6 @@ Per i dati originali sarebbe stato opportuno un modello con inflazione sia di ze
 ### Risultati
 
 La metodologia HGLR non ha selezionato termini di interazione e gli altri modelli stimati non sono sparsi, quindi in questo caso l'obbiettivo di selezionare particolari termini di interazione non è stato pienamente raggiunto. Si è mostrato come questa particolare tipologia di dati, pur impiegando molte semplificazioni è risultata difficile da analizzare con i metodi a disposizione, sarebbe quindi opportuno indagare o sviluppare opportuni approcci per queste analisi.
-
-## Bibliografia
 
 
 
