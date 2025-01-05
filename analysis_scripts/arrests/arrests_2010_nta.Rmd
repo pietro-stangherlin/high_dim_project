@@ -44,6 +44,7 @@ month.cv.k4.sets.gg.name = "rdata/month_cv_set_name_gg.RData"
 
 load(month.cv.k4.sets.name)
 load(month.zeros.cv.k4.sets.name)
+load(month.cv.k4.sets.gg.name)
 
 # best models fitted on all data
 # estimated_best_models = TRUE
