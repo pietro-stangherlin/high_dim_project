@@ -14,19 +14,6 @@ header-includes:
 bibliography: references.bib
 ---
 
-
-```{r setup, include = FALSE}
-knitr::opts_chunk$set(echo = FALSE)
-knitr::opts_chunk$set(fig.align = 'center')
-
-library(bookdown)
-library(knitr)
-
-library(gridExtra)
-library(sf)
-library(ggplot2)
-```
-
 ```{r child = 'arrests_2010_nta.Rmd'}
 ```
 

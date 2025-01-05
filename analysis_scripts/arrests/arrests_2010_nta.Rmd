@@ -1,24 +1,35 @@
-# Analisi NTA 2010 - 2011 interazione tra variabili
+# Analisi degli arresti nel 2010 - 2011 con interazione tra variabili
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(fig.align = 'center')
+
+library(bookdown)
+library(knitr)
+```
 
 ```{r, message=FALSE, warning=FALSE, results='hide'}
 rm(list = ls())
 gc(verbose = FALSE)
+library(gridExtra)
+library(sf)
+library(ggplot2)
 
 # plotting parameters 1d plot
-OUT.WIDTH.1d = "100%"
-OUT.HEIGHT.1d = "100%"
+OUT.WIDTH.1d = "60%"
+OUT.HEIGHT.1d = "60%"
 
 # plotting parameters 2d plots
-OUT.WIDTH = "80%"
-OUT.HEIGHT = "80%"
+OUT.WIDTH = "60%"
+OUT.HEIGHT = "60%"
 
 source("functions_script.R")
 ```
 
 ```{r}
-# Condition: if TRUE execute the computational heavy chunks, else not
-# assuming the models are been loaded from a RData file before.
-# IMPORTANT: in order to reproduce the result set bool_execute_heavy_chunks = TRUE
+# Condizione: se TRUE esegui i blocchi computazionalmente pesanti, altrimenti no
+# assumendo che i modelli siano stati caricati da un file RData precedentemente.
+# IMPORTANTE: per riprodurre il risultato, imposta bool_execute_heavy_chunks = TRUE
 
 bool_execute_heavy_chunks = FALSE
 file_save_name = "rdata/arrests_nta_2010_models_summary.Rdata"
@@ -47,7 +58,6 @@ load(month.zeros.cv.k4.sets.name)
 #   models_fitted_file_name = list()
 # }
 ```
-
 
 ```{r}
 # Preprocessing -------------------------------------
@@ -104,19 +114,12 @@ nrow(na.omit(df_2011)) / nrow(df_2011)
 df_2011 = na.omit(df_2011)
 ```
 
-
-## Descrizione
-
-L'obbiettivo di questa sezione di analisi è verificare se esiste un sottoinsieme di variabili esplicative particolarmente correlate con il numero di arresti, sia marginalmente che considerando l'interazione con ciascuna zona spaziale (NTA).
-Per vincoli computazionali si riduce l'insieme di stima al solo anno 2010: per quest'anno i dati del censo sono esatti e non si sono verificati eventi rari a differenza del 2020 (Covid); l'insieme di verifica scelto è l'anno 2011, in quanto è l'anno più vicino al 2010 (l'assunzione è che i due anni siano abbastanza simili per il fenomeno considerato).
+L'obiettivo di questa sezione di analisi è verificare se esiste un sottoinsieme di variabili esplicative particolarmente correlate con il numero di arresti, sia marginalmente che considerando l'interazione con ciascuna zona spaziale (NTA).
+Per vincoli computazionali abbiamo ridotto l'insieme di stima al solo anno 2010: per quest'anno i dati del censo sono esatti e non si sono verificati eventi rari a differenza del 2020 (Pandemia COVID-19); l'insieme di verifica scelto è l'anno 2011, in quanto è l'anno più vicino al 2010 (l'assunzione è che i due anni siano abbastanza simili per il fenomeno considerato).
 
 ### Problematiche
 
-Questi dati presentano diverse problematiche.
-
-Le scelte fatte sono dovute a fattori computazionali, di tempo e al fatto che per permettere conteggi diversi da 1 è necessario considerare zone spaziali e intervalli temporali non eccessivamente ristretti.
-
-Per quanto concerne gli intervalli temporali si è scelto di ignorare i possibili trend e considerare i singoli anni, per ciascun anno si sono utilizzati i mesi per la costruzione degli insiemi di convalida incrociata. Pur avendo a disposizione il giorno di ciascun arresto la selezione dei mesi è apparsa come un giusto compromesso per garantire che non tutti i conteggi fossero uguali a 1 che comunque è il conteggio minimo e più frequente molto superiore a tutti gli altri conteggi:
+Questi dati presentano diverse problematiche e le scelte intraprese sono dovute a fattori computazionali, di tempo e al fatto che per permettere conteggi diversi da 1 è necessario considerare zone spaziali e intervalli temporali non eccessivamente ristretti. Per quanto concerne gli intervalli temporali abbiamo scelto di ignorare i possibili trend e considerare i singoli anni, per ciascun anno si sono utilizzati i mesi per la costruzione degli insiemi di convalida incrociata. Pur avendo a disposizione il giorno di ciascun arresto la selezione dei mesi è apparsa come un giusto compromesso per garantire che non tutti i conteggi fossero uguali a 1 che comunque è il conteggio minimo e più frequente molto superiore a tutti gli altri conteggi:
 
 ```{r}
 
@@ -139,23 +142,11 @@ df_2010_grouped$count %>%
        ylab = "absolute frequency")
 ```
 
+Questa "sovradispersione" di 1 è ragionevole data la costruzione dei conteggi per aggregazione di osservazioni con le stesse combinazioni di covariate; si dovrebbero inoltre aggiungere osservazioni con conteggi nulli per ogni combinazione di variabili per cui non si sono osservati arresti. Mantenere tutti i conteggi unitari rende computazionalmente molto oneroso l'addattamenteo dei modelli e può creare problemi nella selezione degli stessi. 
 
-Questa "sovradispersione" di 1 è ragionevole data la costruzione dei conteggi per aggregazione di osservazioni con le stesse combinazioni di covariate; si dovrebbero inoltre aggiungere osservazioni con conteggi nulli per ogni combinazione di variabili per cui non si sono osservati arresti.
-
-Mantenere tutti i conteggi unitari rende computazionalmente molto oneroso l'addattamenteo dei modelli e può creare problemi nella selezione degli stessi 
-
-La soluzione adottata è basata sul sottocampionamento: si stabilisce una soglia per i valori di conteggi oltre cui non sottocampionare, si conta la frequenza di conteggi osservati per tale soglia e si sottocampiona un sottoinsieme di grandezza uguale a quella frequenza da ciascun sottoinsieme di conteggi con valori inferiori alla soglia.
-
-L'assunzione di fondo è che, almeno per i conteggi fino alla soglia considerata, la frequenza sia descrescente rispetto al valore degli stessi; un aspetto da sottolineare della metodologia proposta, in quanto compromesso, è che introduce distorsione nelle stime.
-
-Si considerano due tipologie di dataset, entrambi impiegano il sottocampiomamento, ma in uno i conteggi nulli sono presenti (solo per modelli Poisson) e nell'altro sono assenti (modelli per risposta continua e Poisson) (i modelli per risposta continua sono adattati impiegando una trasformazione logaritmica dei dati senza conteggi nulli).
-
-Per questo studio la soglia selezionata che è apparsa ragionevole in base alle considerazioni precedenti è di conteggi uguali a 10.
-
-Il sottocampionamento è effettuato anche per i dataset completi relativi a 2010 e 2011 (escludendo i mesi come variabile di raggruppamento), ma non sono stati aggiunti gli zeri per permettere il confronto tra modelli per risposta continua.
+La soluzione che abbiamo adottato è basata sul sottocampionamento: si stabilisce una soglia per i valori di conteggi oltre cui non sottocampionare, si conta la frequenza di conteggi osservati per tale soglia e si sottocampiona un sottoinsieme di grandezza uguale a quella frequenza da ciascun sottoinsieme di conteggi con valori inferiori alla soglia. L'assunzione di fondo è che, almeno per i conteggi fino alla soglia considerata, la frequenza sia descrescente rispetto al valore degli stessi; un aspetto da sottolineare della metodologia proposta, in quanto compromesso, è che introduce distorsione nelle stime. Abbiamo considerato due tipologie di dataset, entrambi impiegano il sottocampiomamento, ma in uno i conteggi nulli sono presenti (solo per modelli Poisson) e nell'altro sono assenti (modelli per risposta continua e Poisson) (i modelli per risposta continua sono adattati impiegando una trasformazione logaritmica dei dati senza conteggi nulli). Per questo studio la soglia che abbiamo selezionato che è apparsa ragionevole in base alle considerazioni precedenti è di conteggi uguali a 10. Il sottocampionamento è stato effettuato anche per i dataset completi relativi a 2010 e 2011 (escludendo i mesi come variabile di raggruppamento), ma non sono stati aggiunti gli zeri per permettere il confronto tra modelli per risposta continua.
 
 Per tutti i datasets, in particolare per quelli usati per fare convalida incrociata, se una osservazione nell'insieme di verifica presentava una modalità di una variabile qualitativa non presente nel corrispondente insieme di stima allora era rimossa; questa è un ulteriore introduzione di distorsione, alleviata dall'assunzione le osservazioni eliminate avrebbero presentato conteggi molto bassi e quindi potenzialmente soggette al sottocampionamento.
-
 
 ```{r, eval = bool_execute_heavy_chunks, results='hide'}
 
@@ -235,10 +226,7 @@ save(joined_zero_counts_2010_df, file = file_joined_zero_counts_2010_df)
 
 
 ### Elevata dimensionalità
-
-I dati presentano elevata dimensionalità considerando le interazioni tra la variabile spaziale (NTA) e le covariate (qualitative) di arrests.
-
-Per avere delle misure quantitative del rapporto tra osservazioni e colonne si considera il dataset in cui si sono definiti i conteggi senza considerare i mesi: si riporta il rapporto tra il numero di osservazioni (righe) e il prodotto tra il numero di modalità di NTA e la somma delle modalità delle variabili qualitative di arrests.
+I dati presentano elevata dimensionalità considerando le interazioni tra la variabile spaziale (NTA) e le covariate (qualitative) di `arrests`. Per avere delle misure quantitative del rapporto tra osservazioni e colonne abbiamo considerato il dataset in cui si sono definiti i conteggi senza considerare i mesi: si riporta il rapporto tra il numero di osservazioni (righe) e il prodotto tra il numero di modalità di NTA e la somma delle modalità delle variabili qualitative di `arrests`.
 
 ```{r}
 set.seed(123)
@@ -246,7 +234,6 @@ set.seed(123)
 df_2010_grouped_subsampled = Subsample_Below_Threshold(df = df_2010_grouped, threshold = 10)
 df_2011_grouped_subsampled = Subsample_Below_Threshold(df = df_2011_grouped, threshold = 10)
 ```
-
 
 ```{r}
 # make the data.frame version for grouped lasso: 
@@ -278,41 +265,35 @@ df_2010_numlevels = c(apply(df_2010_grouped_subsampled_gg[,1:6], 2,
                                            function(col) length(unique(col))), rep(1,9))
 ```
 
-
-
 ```{r}
 var_unique_len = apply(df_2010_grouped_subsampled,
                        2,
                        function(col) length(unique(col)))
 ```
 
-Senza considerare interazioni tra KY_CD (esplicativa non spaziale di arrest con più modalità) con gli NTA il rapporto è (considerando i dati 2011):
+Senza considerare interazioni tra `KY_CD` (esplicativa non spaziale di arrest con più modalità) con gli NTA il rapporto è (considerando i dati 2011):
 ```{r, include = TRUE}
 nrow(df_2010_grouped_subsampled) / (var_unique_len["NTA2020"] *
   sum(var_unique_len[c("LAW_CAT_CD", "AGE_GROUP", "PERP_SEX", "PERP_RACE")]))
 ```
 
-Considerando anche interazioni tra KY_CD e NTA rapporto è:
+Considerando anche interazioni tra `KY_CD` e i NTA rapporto è:
 ```{r, include=TRUE}
 nrow(df_2010_grouped_subsampled) / (var_unique_len["NTA2020"] *
   sum(var_unique_len[c("KY_CD", "LAW_CAT_CD", "AGE_GROUP",
                        "PERP_SEX", "PERP_RACE")]))
 ```
 
-
 ## Modelli
 
 ### Criterio di selezione dei parametri di regolazione
 
-Come già accennato, i parametri di regolazione sono selezionati tramite convalida incrociata (CV) impiegando i mesi per la costruzione degli insiemi. La funzione di perdita scelta è il RMSE.
+Come già accennato, i parametri di regolazione li abbiamo selezionati tramite convalida incrociata (CV) impiegando i mesi per la costruzione degli insiemi. La funzione di perdita scelta è il RMSE. La procedura per la costruzione degli insiemi è la seguente:
 
-La procedura per la costruzione degli insiemi è la seguente:
-
-- Selezione di k: il numero di insiemi di convalida (si sceglie k = 4)
-- Ogni insieme di convalida è composto da osservazioni raggruppate di 12 / k (3) mesi e i mesi rimanenti (9) vengono utilizzati per adattare il modello.
-- Per cercare di compensare e mediare le fluttuazioni stagionali, i mesi di validazione sono scelti il più distanziati possibile. Ad esempio, nel caso di k = 4, il primo insieme di validazione è (gennaio, maggio, settembre), il secondo set è (febbraio, giugno, ottobre), il terzo è (marzo, luglio, novembre) e il quarto è (aprile, agosto, dicembre).
-- Per rendere ogni risposta comparabile avendo utilizzato un numero diverso di mesi, una nuova risposta è definita come il rapporto degli arresti diviso per il numero di mesi utilizzati nel raggruppamento (ovvero l'esponenziale dell 'offset nel modello di Poisson).
-
+- Selezione di $k$: il numero di insiemi di convalida (si sceglie $k = 4$);
+- Ogni insieme di convalida è composto da osservazioni raggruppate di $12 / k$ (3) mesi e i mesi rimanenti (9) vengono utilizzati per adattare il modello;
+- Per cercare di compensare e mediare le fluttuazioni stagionali, i mesi di validazione sono scelti il più distanziati possibile. Ad esempio, nel caso di $k = 4$, il primo insieme di validazione è (gennaio, maggio, settembre), il secondo set è (febbraio, giugno, ottobre), il terzo è (marzo, luglio, novembre) e il quarto è (aprile, agosto, dicembre);
+- Per rendere ogni risposta comparabile avendo utilizzato un numero diverso di mesi, una nuova risposta è definita come il rapporto degli arresti diviso per il numero di mesi utilizzati nel raggruppamento (ovvero l'esponenziale dell'offset nel modello di Poisson).
 
 ```{r}
 # months indexes sets
@@ -335,8 +316,7 @@ month_sets_ind = list(k4 = matrix(c(1, 5, 9, # used
 ```
 
 ### Matrice del modello
-
-La matrice del modello considerata è quella con tutte le variabili e le interazioni tra tutte le variabili di arrests tranne KY_CD (per ragioni computazionali) e le zone spaziali degli NTA.
+La matrice del modello considerata è quella con tutte le variabili e le interazioni tra tutte le variabili di `arrests` tranne `KY_CD` (per ragioni computazionali) e le zone spaziali degli NTA.
 ```{r, include=TRUE}
 
 
@@ -346,7 +326,6 @@ FORMULA.YES.INTERACTIONS = as.formula("count ~. -1 +
                             NTA2020:PERP_SEX + 
                             NTA2020:PERP_RACE")
 ```
-
 
 ```{r}
 # if count is the response variable and count = 0
@@ -359,7 +338,6 @@ FORMULA.YES.INTERACTIONS.sparse = as.formula("temp_response ~. -1 - count +
                             NTA2020:PERP_RACE")
 ```
 
-
 ```{r, warning=FALSE, results='hide'}
 
 df_2010_grouped_subsampled.matrix = sparse.model.matrix(FORMULA.YES.INTERACTIONS,
@@ -370,8 +348,7 @@ df_2011_grouped_subsampled.matrix = sparse.model.matrix(FORMULA.YES.INTERACTIONS
 gc()
 ```
 
-
-Poichè la matrice del modello dell'insieme di verifica e quella dell'insieme di stima non condividono tutte le colonne si considerare solo le colonne in comune alle due.
+Poichè la matrice del modello dell'insieme di verifica e quella dell'insieme di stima non condividono tutte le colonne abbiamo considerato solo le colonne in comune alle due.
 ```{r}
 # check dimensions
 dim(df_2010_grouped_subsampled.matrix)
@@ -423,34 +400,22 @@ save(month.cv.k4.sets.gg, file = month.cv.k4.sets.gg.name)
 
 ```
 
-
-
 ### Esplicative quantitative
-
-IL dataset presenta principalmente esplicative categoriali, benchè le esplicative quantitative permettano la specificazione di diverse forme funzionali qui, per ragioni computazionali ci si limita ad assumere una relazione monotona lineare con la risposta.
+Il dataset presenta principalmente esplicative categoriali, benchè le esplicative quantitative permettano la specificazione di diverse forme funzionali qui, per ragioni computazionali ci si limita ad assumere una relazione monotona lineare con la risposta.
 
 ### Modelli per risposta continua
-
 Nell'impiego dei modelli con risposta continua (con errori gaussiani i.i.d) si è scelto di adattare il modello su una trasformazione logaritmica della risposta: `y = count / n_month_train` (per i dati senza introduzione di conteggi nulli) e calcolare l'errore di previsioni sulla trasformazione `count = exp(y * n_month_test)` rispetto al numero di conteggi osservati, in questo modo la previsione è sempre positiva.
 
-
 ### Modelli e procedure considerati
+È risaputo dalla teoria che, almeno per il LASSO, la selezione delle vere variabili necessita una bassa correlazione tra le vere esplicative e le rimanenti; nel caso delle interazioni, benchè per variabili qualitative (la correlazione è definita per variabili quantitative), questa assunzione non è realistica. Abbiamo voluto comunque provare a vedere il comportamento delle metodologie viste a in classe a cui è affiancato un metodo appositamente ideato per individuare interazioni.
 
-E' risaputo dalla teoria che, almeno per il LASSO, la selezione delle vere variabili necessita una bassa correlazione tra le vere esplicative e le rimanenti; nel caso delle interazioni, benchè per variabili qualitative (la correlazione è definita per variabili quantitative), questa assunzione non è realistica. Si vuole comunque provare a vedere il comportamento delle metodologie viste a in classe a cui è affiancato un metodo appositamente ideato per individuare interazioni.
-
-Tra i modelli visti nel corso quelli considerati sono modelli normali con penalizzazioni LASSO, Elasticnet, SCAD ed MCP e modelli Poisson con penalizzazioni LASSO ed Elasticnet. Per tutti i modelli si seleziona il parametro (eventualmente vettoriale) di regolazione che minimizza l'errore di convalida. Per i metodi per cui il parametro di regolarizzazione ha dimensione 2 si definisce una griglia di valori (di cui si riporta il grafico delle curve di livello dell'errore).
-Per i metodi SCAD e MCP, poichè `ncvreg` presenta dei problemi computazionali dovuti alle dimensioni del dataset è utilizzata la libreria `picasso` ([@picasso]) che però non fornisce indicazioni rispetto alle regioni non convesse delle stime.
+Tra i modelli visti nel corso, quelli che abbiamo considerato sono modelli normali con penalizzazioni LASSO, Elasticnet, SCAD ed MCP e modelli Poisson con penalizzazioni LASSO ed Elasticnet. Per per tutti i modelli abbiamo selezionato il parametro (eventualmente vettoriale) di regolazione che minimizza l'errore di convalida. Per i metodi per cui il parametro di regolarizzazione ha dimensione 2 abbiamo definito una griglia di valori (di cui si riporta il grafico delle curve di livello dell'errore).
+Per i metodi SCAD e MCP, poichè `ncvreg` presenta dei problemi computazionali dovuti alle dimensioni del dataset abbiamo utilizzato la libreria `picasso` [@picasso] che però non fornisce indicazioni rispetto alle regioni non convesse delle stime.
 
 #### HGLR
+Diversamente dai metodi menzionati abbiamo considerato anche una metodologia specificatamente ideata per selezionare termini di interazione, ovvero la "*Hierarchical Group-Lasso Regularization*" (HGLR) [@HGLR]. Il Group LASSO standard infatti non è impiegabile in quanto i termini di interazione (per due variabili) dovrebbero appartene agli insiemi di entrambe le variabili. La libreria associata all'articolo non implementa il modello Poisson o Binomiale Negativo, quindi l'abbiamo usata solo assumendo risposta continua gaussiana.
 
-Diversamente dai metodi menzionati si considera anche una metodologia specificatamente ideata per selezionare termini di interazione, ovvero la "Hierarchical Group-Lasso Regularization" (HGLR) ([@HGLR]), il Group LASSO standard non è impiegabile in quanto i termini di interazione (per due variabili) dovrebbero appartene agli insiemi di entrambe le variabili. La libreria associata all'articolo non implementa il modello Poisson o Binomiale Negativo, quindi è usata solo assumendo risposta continua gaussiana.
-
-Si introduce brevemente la procedura usando la medesima notazione adottata nell'articolo. Il metodo utilizza il Group LASSO per imporre una struttura gerarchica degli effetti di interazione ovvero l'usuale imposizione che una interazione sia presente solo se sono presenti i relativi effetti principali.
-
-Assumendo il caso semplice in cui $\mathbf{X}_{1}$ e $\mathbf{X}_{1}$ sono matrici di indicatrici per due variabili categoriali e $\mathbf{X}_{1: 2}$ sia la corrispondente matrice di interazione.
-
-
-Si trovano i parametri $\mu, \alpha, \tilde{\alpha}$ minimizzando:
+Si introduce brevemente la procedura usando la medesima notazione adottata nell'articolo. Il metodo utilizza il Group LASSO per imporre una struttura gerarchica degli effetti di interazione ovvero l'usuale imposizione che una interazione sia presente solo se sono presenti i relativi effetti principali. Assumendo il caso semplice in cui $\mathbf{X}_{1}$ e $\mathbf{X}_{1}$ sono matrici di indicatrici per due variabili categoriali e $\mathbf{X}_{1: 2}$ sia la corrispondente matrice di interazione, si trovano i parametri $\mu, \alpha, \tilde{\alpha}$ minimizzando:
 $$
 \frac{1}{2}\left\|\mathbf{Y}-\mu \cdot \mathbf{1}-\mathbf{X}_{1} \alpha_{1}-\mathbf{X}_{2} \alpha_{2}-\left[\mathbf{X}_{1} \mathbf{X}_{2} \mathbf{X}_{1: 2}\right]\left[\begin{array}{c}
 \tilde{\alpha}_{1} \\
@@ -465,21 +430,15 @@ $$
 \sum_{i=1}^{L_{1}} \alpha_{1}^{i}=0, \quad \sum_{j=1}^{L_{2}} \alpha_{2}^{j}=0, \quad \sum_{i=1}^{L_{1}} \tilde{\alpha}_{1}^{i}=0, \quad \sum_{j=1}^{L_{2}} \tilde{\alpha}_{2}^{j}=0 \sum_{i=1}^{L_{1}} \alpha_{1: 2}^{i j}=0, \quad \sum_{j=1}^{L_{2}} \alpha_{1: 2}^{i j}=0
 $$
 
-Si nota che il coefficiente degli effetti principali stimato per la prima variabile è $\hat{\theta}_{1} =\hat{\alpha}_{1}+\hat{\tilde{\alpha}}_{1}$ e in modo analogo per la seconda variabile $\hat{\theta}_{2} =\hat{\alpha}_{2}+\hat{\tilde{\alpha}}_{2}$.
+Si nota che il coefficiente degli effetti principali stimato per la prima variabile è $\hat{\theta}_{1} =\hat{\alpha}_{1}+\hat{\tilde{\alpha}}_{1}$ e in modo analogo per la seconda variabile $\hat{\theta}_{2} =\hat{\alpha}_{2}+\hat{\tilde{\alpha}}_{2}$. Si può mostrare che il problema precedente è equivalente ad un problema di ottimizzazione Group LASSO senza vincoli sulle somme a zero e senza "sovrapposizione" di coefficienti
 
-Si può mostrare che il problema precedente è equivalente ad un problema di ottimizzazione Group LASSO senza vincoli sulle somme a zero e senza "sovrapposizione" di coefficienti
-
-
-#### Standardizzazione
-
-In tutti i casi la matrice delle esplicative è standardizzata prima di adattare il modello, ma per HGLR sono standardizzate solo le esplicative continue, per cambiare questa opzione si dovrebbe modificare il codice, eventualità che non considerata per motivi di tempo.
+### Standardizzazione
+In tutti i casi la matrice delle esplicative è standardizzata prima di adattare il modello, ma per HGLR sono standardizzate solo le esplicative continue, per cambiare questa opzione si dovrebbe modificare il codice, eventualità che non abbiamo considerato per motivi di tempo.
 
 ```{r, eval = bool_execute_heavy_chunks}
 models_summary$lasso <- Lasso_CV(month.cv.k4.sets,
                                         my.lambda.vals = exp(seq(-20, 2, 0.1)) %>% sort(decreasing = T))
 ```
-
-
 
 ```{r, eval = bool_execute_heavy_chunks}
 models_summary$gglasso_no_kycd = GLasso_CV(cv.sets = month.cv.k4.sets.gg,
@@ -491,7 +450,6 @@ models_summary$gglasso_no_kycd = GLasso_CV(cv.sets = month.cv.k4.sets.gg,
 
 save(models_summary, file = file_save_name)
 ```
-
 
 ```{r, eval = bool_execute_heavy_chunks}
 models_summary$gglasso_yes_kycd = GLasso_CV(cv.sets = month.cv.k4.sets.gg,
@@ -516,7 +474,6 @@ save(models_summary, file = file_save_name)
 
 ```
 
-
 ```{r, warning = FALSE, eval = bool_execute_heavy_chunks}
 models_summary$mcp = NonConvex_Cv(cv.sets = month.cv.k4.sets,
                                              my.lambda.vals = exp(seq(-15, 1, 0.2)) %>% sort(decreasing = TRUE),
@@ -537,13 +494,10 @@ models_summary$elasticnet = Elastic_Cv(cv.sets = month.cv.k4.sets,
 save(models_summary, file = file_save_name)
 ```
 
-
-
 ```{r}
 # Known convergence difficult, see help here. https://cran.r-project.org/web/packages/glmnet/vignettes/glmnetFamily.pdf
 glmnet.control(mxitnr = 50) # increase maximum no. of IRLS iterations allowed
 ```
-
 
 ```{r, eval = bool_execute_heavy_chunks, warning=FALSE}
 models_summary$lasso.poi = Lasso_Offset_CV(cv.sets = month.cv.k4.sets,
@@ -563,7 +517,6 @@ models_summary$lasso.poi.zeros = Lasso_Offset_CV(cv.sets = month.zeros.cv.k4.set
 save(models_summary, file = file_save_name)
 ```
 
-
 ```{r, warning=FALSE, eval = bool_execute_heavy_chunks}
 models_summary$elasticnet.poi = Elastic_Offset_Cv(cv.sets = month.cv.k4.sets,
                                                         my.lambda.vals = exp(seq(-10, 2, 0.2)) %>% sort(decreasing = TRUE),
@@ -572,8 +525,6 @@ models_summary$elasticnet.poi = Elastic_Offset_Cv(cv.sets = month.cv.k4.sets,
 
 save(models_summary, file = file_save_name)
 ```
-
-
 
 ```{r, warning=FALSE, eval = bool_execute_heavy_chunks}
 models_summary$elasticnet.poi.zeros = Elastic_Offset_Cv(cv.sets = month.zeros.cv.k4.sets,
@@ -584,7 +535,6 @@ models_summary$elasticnet.poi.zeros = Elastic_Offset_Cv(cv.sets = month.zeros.cv
 # backup to save key model info
 save(models_summary, file = file_save_name)
 ```
-
 
 Per il modello normale il $\lambda$ minimo è molto vicino a zero (poichè la soluzione è sul bordo si dovrebbe provare a diminuire ulteriormente $\lambda$, ma già così i coefficienti sono quasi uguali alle stime non penalizzate).
 Per il modello Poisson il $\lambda$ selezionato è maggiore. (Figura 
@@ -600,8 +550,8 @@ PlotOneDim(x = log(models_summary$lasso$lambda),
            x.1se = log(models_summary$lasso$l1se),
            xlab = "log lambda",
            ylab = "CV error",
-           main = "LASSO  CV error",
-          min.leg = "lambda min",
+           main = "LASSO CV error",
+           min.leg = "lambda min",
            onese.leg = "lambda 1se")
 
 PlotOneDim(x = log(models_summary$lasso.poi$lambda),
@@ -611,11 +561,10 @@ PlotOneDim(x = log(models_summary$lasso.poi$lambda),
            x.1se = log(models_summary$lasso.poi$l1se),
            xlab = "log lambda",
            ylab = "CV error",
-           main = "LASSO Poisson  CV error",
-          min.leg = "lambda min",
+           main = "LASSO Poisson CV error",
+           min.leg = "lambda min",
            onese.leg = "lambda 1se")
 ```
-
 
 Per il modello continuo Elasticnet individua un $\alpha$ intermedio tra Ridge e LASSO, ma come sopra il $\lambda$ è prossimo a zero (considerazioni uguali a sopra), nel modello Poisson invece è selezionata una Ridge con $\lambda$ non prossimo a zero. (Figura \@ref(fig:fig-cv-err-elastic-linear-poi))
 
@@ -627,7 +576,7 @@ TwoParErrPlot(model_list = models_summary$elasticnet,
               cv_err_matr_name = "cv.err.matr",
               row_par_min_name = "lmin",
               col_par_min_name = "amin",
-              my.main = "Elasticnet  Cv error contour",
+              my.main = "Elasticnet CV error contour",
               my.xlab = "log lambda",
               my.ylab = "alpha")
 
@@ -637,15 +586,15 @@ TwoParErrPlot(model_list = models_summary$elasticnet.poi,
               cv_err_matr_name = "cv.err.matr",
               row_par_min_name = "lmin",
               col_par_min_name = "amin",
-              my.main = "Elasticnet Poisson  Cv error contour",
+              my.main = "Elasticnet Poisson CV error contour",
               my.xlab = "log lambda",
               my.ylab = "alpha")
 
 par(mfrow = c(1,1))
 ```
 
-
 Sia per SCAD che per MCP il $\lambda$ selezionato è prossimo a zero, provando ad aumentare ulteriormente $\gamma$ e diminuire $\lambda$ la soluzione sostanzialmente non cambia. (Figura \@ref(fig:fig-cv-err-scad-mcp))
+
 ```{r fig-cv-err-scad-mcp, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT,fig.cap="Curve di livello dell'errore di convalida incrociata in funzione dei parametri di regolazione per SCAD ed MCP del modello lineare"}
 
 
@@ -655,7 +604,7 @@ TwoParErrPlot(model_list = models_summary$mcp,
               cv_err_matr_name = "cv.err.matr",
               row_par_min_name = "lmin",
               col_par_min_name = "gmin",
-              my.main = "MCP  Cv error contour",
+              my.main = "MCP CV error contour",
               my.xlab = "log lambda",
               my.ylab = "gamma")
 
@@ -665,15 +614,15 @@ TwoParErrPlot(model_list = models_summary$scad,
               cv_err_matr_name = "cv.err.matr",
               row_par_min_name = "lmin",
               col_par_min_name = "gmin",
-              my.main = "SCAD  Cv error contour",
+              my.main = "SCAD CV error contour",
               my.xlab = "log lambda",
               my.ylab = "gamma")
 
 par(mfrow = c(1,1))
 ```
 
-
 Per i modelli di Poisson adattati con conteggi nulli i $\lambda$ ottimi tendono al metodo non penalizzato; nel caso di Elasticnet è selezionata una ridge (Figura \@ref(fig:fig-cv-err-zeros-poi)).
+
 ```{r fig-cv-err-zeros-poi, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT,fig.cap="Grafici dell'errore di convalida incrociata in funzione dei parametri di regolazione per LASSO ed Elasticnet per modelli Poisson per dati con aggiunta di zeri"}
 
 PlotOneDim(x = log(models_summary$lasso.poi.zeros$lambda),
@@ -683,7 +632,7 @@ PlotOneDim(x = log(models_summary$lasso.poi.zeros$lambda),
            x.1se = log(models_summary$lasso$l1se),
            xlab = "log lambda",
            ylab = "CV error",
-           main = "LASSO Poi zeros  CV error",
+           main = "LASSO Poi zeros CV error",
           min.leg = "lambda min",
            onese.leg = "lambda 1se")
 
@@ -693,16 +642,16 @@ TwoParErrPlot(model_list = models_summary$elasticnet.poi.zeros,
               cv_err_matr_name = "cv.err.matr",
               row_par_min_name = "lmin",
               col_par_min_name = "amin",
-              my.main = "Elasticnet Poisson zeros  Cv error contour",
+              my.main = "Elasticnet Poisson zeros CV error contour",
               my.xlab = "log lambda",
               my.ylab = "alpha")
 
 
 ```
 
-
 HGLR presenta la medesima soluzione di $\lambda$ per il valore minimo di errore standard e in entrambi i casi con il criterio a un errore standard il $\lambda$ è tale che tutti i coefficienti siano uguali a zero.
-```{r cv-err-lasso-linear-gg, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT, fig.cap="Grafici dell'errore di convalida incrociata in funzione del parametro di regolazione per Hierarchical Group LASSO per modelli lineari"}
+
+```{r cv-err-lasso-linear-gg, fig.show='hold', out.width = OUT.WIDTH, out.height = OUT.HEIGHT, fig.cap="Grafici dell'errore di convalida incrociata in funzione del parametro di regolazione per Hierarchical Group LASSO per modelli lineari"}
 
 
 PlotOneDim(x = log(models_summary$gglasso_no_kycd$lambda),
@@ -732,7 +681,6 @@ PlotOneDim(x = log(models_summary$gglasso_yes_kycd$lambda),
 # backup to save key model info
 save(models_summary, file = file_save_name)
 ```
-
 
 Per confontare modelli per risposta continua e discreta nelle previsioni sui dati 2011 si approssimano le previsioni continue al primo intero. Si deve tenere presente che data la particolare procedura per l'elaborazione dei dati questa i risultati relativi a questa metrica devono essere interpretati con cautela.
 
@@ -973,10 +921,8 @@ save(models_summary, file = file_save_name)
 
 ```
 
-
 ### Modelli selezionati
-
-Si riportano (tabella (\@ref(tab:test-error))) gli errori di previsione sui dati del 2011 (senza zeri) dei vari modelli selezionati tramite convalida incrociata adattati sui dati completi 2010 (senza zeri). La migliore previsione si ha per il modello Poisson con penalità LASSO (selezionato sui dati con gli zeri) per $\lambda$ a errore a un errore standard, mentre il peggiore è sempre il modello di Poisson ma con penalità Elasticnet.
+Si riportano in tabella (\@ref(tab:test-error)) gli errori di previsione sui dati del 2011 (senza zeri) dei vari modelli selezionati tramite convalida incrociata adattati sui dati completi 2010 (senza zeri). La migliore previsione si ha per il modello Poisson con penalità LASSO (selezionato sui dati con gli zeri) per $\lambda$ a errore ad uno standard error, mentre il peggiore è sempre il modello di Poisson ma con penalità Elasticnet.
 
 ```{r test-error, tab.cap="Errori di previsione sui dati 2011 dei migliori modelli selezionati tramite convalida incrociata"}
 models.errors = data.frame(model = c("lasso",
@@ -1009,9 +955,8 @@ models.errors = data.frame(model = c("lasso",
 kable(models.errors %>% arrange(test_error))
 ```
 
-
-I grafici dei coefficienti stimati confermano, per LASSO ed Elasticnet non avviene selezione delle variabili.
-Le stime non sono sparse nemmeno con il criterio dell'errore a un errore standard.
+I grafici dei coefficienti stimati confermano che per LASSO ed Elasticnet non avviene selezione delle variabili.
+Le stime non sono sparse nemmeno con il criterio dell'errore a uno stardard error.
 Anche per SCAD ed MCP non avviene selezione di variabili: le stime (non riportate) sono quasi uguali a quelle LASSO ed Elasticnet, non si reputa quindi necessario controllare l'eventuale regione non convessa delle stime (Figura \@ref(fig:fig-beta-lasso-elastic-linear-poi)).
 
 ```{r fig-beta-lasso-elastic-linear-poi,  fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d,fig.cap="Grafici dei coefficienti stimati sui dati 2010 dei modelli selezionati precedentemente per LASSO ed Elasticnet per modelli lineare e Poisson"}
@@ -1041,8 +986,8 @@ legend("bottomright",
        bty = "n")
 ```
 
-
 I modelli Poisson adattati considerando gli zeri presentano una maggiore selezione di variabili rispetto ai precedenti (Figura \@ref(fig:fig-beta-zeros-lasso-poi)).
+
 ```{r fig-beta-zeros-lasso-poi,  fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d,fig.cap="Grafici dei coefficienti stimati sui dati 2010 dei modelli Poisson (LASSO) selezionati precedentemente sui dati con aggiunta di zeri"}
 
 par(mfrow = c(1,1))
@@ -1059,22 +1004,13 @@ legend("bottomright",
        bty = "n")
 ```
 
+La tabella (\@ref(tab:tab-sparsity-ratio)) contiene per ciascun modello il rapporto tra il numero di elementi non nulli e il numero di elementi totali del vettore dei coefficienti. Il metodo HGLR non seleziona nessun termine di interazione (\@ref(tab:gg-lasso-beta)). I coefficienti selezionati sono relativi alle variabili `PERP_RACE`, `WNHP`, `BNHP` e sono più piccoli di quelli per gli altri modelli, cioè può essere in parte dovuto al fatto che `glinternet` standardizzi solo colonne relative alle variabili continue, mentre negli altri casi tutte le colonne sono standarizzate, quindi i coefficienti non sono propriamente comparabili. È comunque interessante notare come tutte le variabili selezionate siano relative all'etnia (dell'arrestato e di stratificazione); secondo il modello i conteggi presentano correlazione positiva con popolazione di etnia nera e etnia dell'arrestato nera e bianca/ispanica.
 
-La tabella (\@ref(tab:tab-sparsity-ratio)) contiene per ciascun modello il rapporto tra il numero di elementi non nulli e il numero di elementi totali del vettore dei coefficienti.
-Il metodo HGLR non seleziona nessun termine di interazione (\@ref(tab:gg-lasso-beta)). I coefficienti selezionati sono relativi alle variabili `PERP_RACE`, `WNHP`, `BNHP` e sono più piccoli di quelli per gli altri modelli, cioè può essere in parte dovuto al fatto che `glinternet` standardizzi solo colonne relative alle variabili continue, mentre negli altri casi tutte le colonne sono standarizzate, quindi i coefficienti non sono propriamente comparabili. E' comunque interessante notare come tutte le variabili selezionate siano relative all'etnia (dell'arrestato e di stratificazione); secondo il modello i conteggi presentano correlazione positiva con popolazione di etnia nera e etnia dell'arrestato nera e bianca / ispanica.
 ```{r gg-lasso-beta, tab.cap="Coefficienti selezionati per il metodo HGLR"}
 models_summary$gglasso_no_kycd$beta_df %>% kable
 ```
 
-
-
-Il modello Poisson con penalizzazione LASSO (criterio a un errore standard) e impiegando gli zeri è quello con il rapporto minore tra i metodi classici, questo modello è l'oggetto delle successive analisi.
-
-E' interessante notare come il modello con la migliore previsione sui dati 2011 sia quello con penalizzazione LASSO e non Elasticnet, come ci si sarebbe potuti invece aspettare data la natura di correlazione delle esplicative data dall'introduzione dei termini di interazione.
-Poichè le stime LASSO per esplicative correlate non sono stabili le conclusioni inferenziali ed intepretative devono essere prese con cautela.
-
-Si ricorda che per GLM di Poisson con legame canonico, in assenza di interazioni, l'aumento unitario di una variabile fissate tutte le altre induce una modifica moltiplicativa nel parametro della media pari all'esponenziale del coefficiente associato alla variabile. Nel caso considerato il parametro è il numero di arresti medi mensili (poichè si è introdotto l'offset). Sono presenti delle ulteriori difficoltà interpretative dei coefficienti dovuti alla standardizzazione delle variabili e al sottocampionamento che di fatto sottostima il numero di conteggi nulli o bassi. In questa analisi si è inoltre più interessati alle variabili associate a un incremento degli arresti più che a una loro diminuzione.
-
+Il modello Poisson con penalizzazione LASSO (criterio a un errore standard) e impiegando gli zeri è quello con il rapporto minore tra i metodi classici, quindi questo modello è l'oggetto delle successive analisi. È interessante notare come il modello con la migliore previsione sui dati 2011 sia quello con penalizzazione LASSO e non Elasticnet, come ci si sarebbe potuti invece aspettare data la natura di correlazione delle esplicative data dall'introduzione dei termini di interazione. Poichè le stime LASSO per esplicative correlate non sono stabili le conclusioni inferenziali ed intepretative devono essere prese con cautela. Si ricorda che per GLM di Poisson con legame canonico, in assenza di interazioni, l'aumento unitario di una variabile fissate tutte le altre induce una modifica moltiplicativa nel parametro della media pari all'esponenziale del coefficiente associato alla variabile. Nel caso considerato il parametro è il numero di arresti medi mensili (poichè si è introdotto l'offset). Sono presenti delle ulteriori difficoltà interpretative dei coefficienti dovuti alla standardizzazione delle variabili e al sottocampionamento che di fatto sottostima il numero di conteggi nulli o bassi. In questa analisi siamo inoltre più interessati alle variabili associate a un incremento degli arresti più che a una loro diminuzione.
 
 ```{r tab-sparsity-ratio, tab.cap="Rapporto del numero di coefficienti non nulli sul numero di coefficienti totali"}
 
@@ -1113,14 +1049,11 @@ models.zero.beta = data.frame(model = c("lasso",
 kable(models.zero.beta %>% arrange(not_null_ratio))
 ```
 
-
-
-E' riportata la mappa (Figura \@ref(fig:fig-beta-lasso-zeros-nta2020)) degli NTA colorati in base al valore del corrispettivo coefficiente (marginale) (le zone grigie corrispondono a zone non presenti nei dati, e quindi coefficienti non stimati), per alcuni NTA sono presenti i nomi dei corrispettivi codici, questi sono in corrispondenza dei coefficienti più grandi relativi a termini di interazione in cui sono presenti tali NTA (vedasi sotto). Risalta la zona BK1102 (in giallo) insieme ad altre poche zone isolate.
+È riportata la mappa (Figura \@ref(fig:fig-beta-lasso-zeros-nta2020)) degli NTA colorati in base al valore del corrispettivo coefficiente (marginale) (le zone grigie corrispondono a zone non presenti nei dati, e quindi coefficienti non stimati), per alcuni NTA sono presenti i nomi dei corrispettivi codici, questi sono in corrispondenza dei coefficienti più grandi relativi a termini di interazione in cui sono presenti tali NTA (vedasi sotto). Risalta la zona BK1102 (in giallo) insieme ad altre poche zone isolate.
 
 ```{r, results='hide'}
 geo_data = st_read("../../data/coordinates_maps/nta.geojson")
 ```
-
 
 ```{r, warning=FALSE, message=FALSE}
 
@@ -1160,6 +1093,7 @@ map_with_viridis <- map_with_viridis +
 
 print(map_with_viridis)
 ```
+
 Si riportano anche le tabelle dei coefficienti per le variabili qualitative (marginali).
 
 ```{r}
@@ -1191,74 +1125,59 @@ census_betas = data.frame(var = census_cols,
                           beta = models_summary$lasso.poi.zeros$beta[match(census_cols, beta_names)])
 ```
 
+Tutti i gruppi di età presentao coefficienti positivi ad eccezione della fascia più anziana. La fascia d'età più propensa all'arresto, a parità delle altre variabili è quella tra i 25 e i 44 anni.
 
-Tutti i gruppi di età presentao coefficienti positivi ad eccezione della fascia più anziana.La fascia d'età più propensa all'arresto, a parità delle altre variabili è quella tra i 25 e i 44 anni.
 ```{r}
 AGE_GROUP_betas %>% kable()
 ```
-In media, parità delle altre variabili il numero di arresti mensili passando dai 25-44 anni alla fascia 65+ aumenta moltiplicativamente di 
+
+In media, parità delle altre variabili il numero di arresti mensili passando dai 25-44 anni alla fascia 65+ aumenta moltiplicativamente di:
+
 ```{r}
 exp(AGE_GROUP_betas$beta[2] - AGE_GROUP_betas$beta[4])
 ```
 
-
-
 La percentuale di maschi è associata ad un coefficiente positivo.
+
 ```{r}
 PERP_SEX_betas %>% kable()
 ```
 
-I coefficienti positivi sono relativi a etnia bianca, ispanica e nera. E' possibile che il segno negativo per il termine relativo a "UNKNOWN" sia dovuto al campioamento degli zeri.
+I coefficienti positivi sono relativi a etnia bianca, ispanica e nera. È possibile che il segno negativo per il termine relativo a "UNKNOWN" sia dovuto al campionamento degli zeri.
+
 ```{r}
 PERP_RACE_betas %>% kable()
 ```
 
-
 I coefficienti relativi alle variabili del censo sono relativamente piccoli rispetto a quelli per le altre variabili.
+
 ```{r}
 census_betas %>% kable()
 ```
 
-
 Per le macro categorie di reato solo l'omicidio presenta una coefficiente positivo.
+
 ```{r}
 LAW_CAT_CD_betas %>% kable()
 ```
 
-Si riporta il grafico dei coefficienti per le categorie più granulari di arresto (Figura \@ref(fig:fig-beta-lasso-zeros-ky-cd)). IL coefficiente più grande è relativo alla modalità 677: "OTHER STATES LAW", ovvero leggere generica di altri stati americani, il secondo e terzo coefficiente (modalità 117 e 235) sono relativi all'uso di droga e il quarto a rapine. 
+Si riporta il grafico dei coefficienti per le categorie più granulari di arresto (Figura \@ref(fig:fig-beta-lasso-zeros-ky-cd)). Il coefficiente più grande è relativo alla modalità 677: "OTHER STATES LAW", ovvero legge generica di altri stati americani, il secondo e terzo coefficiente (modalità 117 e 235) sono relativi all'uso di droga e il quarto a rapine.
+
 ```{r fig-beta-lasso-zeros-ky-cd, fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d,fig.cap="Grafici dei coefficienti stimati sui dati 2010 del modello Poisson (LASSO) selezionato con criterio a un errore standard sui dati con aggiunta di zeri relativi alle categorie granulare di arresto KYCD"}
 dotchart(KY_CD_betas$beta[order(KY_CD_betas$beta)],
          labels = KY_CD_betas$KY_CD[order(KY_CD_betas$beta)],
          cex = 0.7, pch = 16, main = "KY_CD beta", las = 1)
 ```
 
+Poichè si è più interessati ai termini correlati positivamente con il numero di arresti si riportano di seguito i 20 coefficienti più grandi del modello Poisson più sparso descritto sopra. Il termine più grande e gli altri due che coinvolgono l'interazione tra NTA e la fascia d'età massima compensano il valore negativo del coefficiente marginale per quella fascia d'età per quelle specifiche zone; un ragionamento analogo vale per i termini di interazione che comprendono la modalità "etnia asiatica" (Figura \@ref(fig:fig-beta-lasso-zeros-interaction))
 
-Poichè si è più interessati ai termini correlati positivamente con il numero di arresti si riportano di seguito i 20 coefficienti più grandi del modello Poisson più sparso descritto sopra.
-
-Il termine più grande e gli altri due che coinvolgono l'interazione tra NTA e la fascia d'età massima compensano il valore negativo del coefficiente marginale per quella fascia d'età per quelle specifiche zone; un ragionamento analogo vale per i termini di interazione che comprendono la modalità "etnia asiatica" (Figura \@ref(fig:fig-beta-lasso-zeros-interaction))
-
-```{r fig-beta-lasso-zeros-interaction,fig.show='hold', out.width = OUT.WIDTH.1d, out.height= OUT.HEIGHT.1d,fig.cap="Grafici dei 20 più grandi coefficienti stimati sui dati 2010 del modello Poisson (LASSO) selezionato con criterio a un errore standard sui dati con aggiunta di zeri"}
+```{r fig-beta-lasso-zeros-interaction, fig.show='hold', out.width = "60%", out.height= "60%", fig.cap="Grafici dei 20 più grandi coefficienti stimati sui dati 2010 del modello Poisson (LASSO) selezionato con criterio a un errore standard sui dati con aggiunta di zeri"}
 models_summary$lasso.poi.zeros$beta_big_1se = PlotFirstCoefs(coef_vec = models_summary$lasso.poi.zeros$beta1se,
                   coef_names = beta_names,
                   first_n = 20,
                   my.main = "LASSO Poisson zeros 1se")
 ```
 
-## Conclusioni di sezione
-
 ### Modelli non impiegati
 
-Non sono presenti SCAD ed MCP per verosimiglianza Poisson a causa degli eccessivi tempi computazionali richiesti.
-
-Per i dati a disposizione un modello solitamente più appropriato di quello Poisson è la binomiale negativa in quanto permette di allentare le ipotesi sull'uguglianza tra media e varianza; provando metodi di stima penalizzati (per cui l'ulteriore parametro per la sovradispersione è un parametro di regolazione) si sono riscontrati vari problemi, ragion per cui tale modello non è presente.
-
-Per i dati originali sarebbe stato opportuno un modello con inflazione sia di zeri che di uni, ma per adattarlo servirebbero delle metodologie ad hoc dato l'eccessivo numero di righe e colonne.
-
-
-### Risultati
-
-La metodologia HGLR non ha selezionato termini di interazione e gli altri modelli stimati non sono sparsi, quindi in questo caso l'obbiettivo di selezionare particolari termini di interazione non è stato pienamente raggiunto. Si è mostrato come questa particolare tipologia di dati, pur impiegando molte semplificazioni è risultata difficile da analizzare con i metodi a disposizione, sarebbe quindi opportuno indagare o sviluppare opportuni approcci per queste analisi.
-
-
-
-
+Non sono presenti SCAD ed MCP per verosimiglianza Poisson a causa degli eccessivi tempi computazionali richiesti. Per i dati a disposizione un modello solitamente più appropriato di quello Poisson è la binomiale negativa in quanto permette di allentare le ipotesi sull'uguglianza tra media e varianza; provando metodi di stima penalizzati (per cui l'ulteriore parametro per la sovradispersione è un parametro di regolazione) si sono riscontrati vari problemi, ragion per cui tale modello non è presente. Per i dati originali sarebbe stato opportuno un modello con inflazione sia di zeri che di 1, ma per adattarlo servirebbero delle metodologie ad hoc dato l'eccessivo numero di righe e colonne.
