@@ -33,7 +33,7 @@ source("functions_script.R")
 bool_execute_heavy_chunks = FALSE
 
 # standardize only quantitative variables
-standardize_only_quant_bool = FALSE
+standardize_only_quant_bool = FALSE # keep false
 
 
 file_save_name = "rdata/arrests_nta_2010_models_summary.Rdata"
@@ -150,9 +150,10 @@ df_2010_grouped$count %>%
        ylab = "absolute frequency")
 ```
 
-Questa "sovradispersione" di 1 è ragionevole data la costruzione dei conteggi per aggregazione di osservazioni con le stesse combinazioni di covariate; si dovrebbero inoltre aggiungere osservazioni con conteggi nulli per ogni combinazione di variabili per cui non si sono osservati arresti. Mantenere tutti i conteggi unitari rende computazionalmente molto oneroso l'addattamenteo dei modelli e può creare problemi nella selezione degli stessi. 
+Questa "sovradispersione" di 1 è ragionevole data la costruzione dei conteggi per aggregazione di osservazioni con le stesse combinazioni di covariate; si dovrebbero inoltre aggiungere osservazioni con conteggi nulli per ogni combinazione di variabili per cui non si sono osservati arresti. Mantenere tutti i conteggi unitari rende computazionalmente molto oneroso l'addattamento dei modelli e può creare problemi nella selezione degli stessi. 
 
 La soluzione che abbiamo adottato è basata sul sottocampionamento: si stabilisce una soglia per i valori di conteggi oltre cui non sottocampionare, si conta la frequenza di conteggi osservati per tale soglia e si sottocampiona un sottoinsieme di grandezza uguale a quella frequenza da ciascun sottoinsieme di conteggi con valori inferiori alla soglia. L'assunzione di fondo è che, almeno per i conteggi fino alla soglia considerata, la frequenza sia descrescente rispetto al valore degli stessi; un aspetto da sottolineare della metodologia proposta, in quanto compromesso, è che introduce distorsione nelle stime. Abbiamo considerato due tipologie di dataset, entrambi impiegano il sottocampiomamento, ma in uno i conteggi nulli sono presenti (solo per modelli Poisson) e nell'altro sono assenti (modelli per risposta continua e Poisson) (i modelli per risposta continua sono adattati impiegando una trasformazione logaritmica dei dati senza conteggi nulli). Per questo studio la soglia che abbiamo selezionato che è apparsa ragionevole in base alle considerazioni precedenti è di conteggi uguali a 10. Il sottocampionamento è stato effettuato anche per i dataset completi relativi a 2010 e 2011 (escludendo i mesi come variabile di raggruppamento), ma non sono stati aggiunti gli zeri per permettere il confronto tra modelli per risposta continua.
+Le richieste computazionali non hanno permesso la valutazione dell'incertezza sui parametri (ad esempio tramite procedure bootstrap), con più risorse una possibilità sarebbe effettuare bootstrap con ricampionamenti di insiemi diversi.
 
 Per tutti i datasets, in particolare per quelli usati per fare convalida incrociata, se una osservazione nell'insieme di verifica presentava una modalità di una variabile qualitativa non presente nel corrispondente insieme di stima allora era rimossa; questa è un ulteriore introduzione di distorsione, alleviata dall'assunzione le osservazioni eliminate avrebbero presentato conteggi molto bassi e quindi potenzialmente soggette al sottocampionamento.
 
@@ -296,7 +297,7 @@ nrow(df_2010_grouped_subsampled) / (var_unique_len["NTA2020"] *
 
 ### Criterio di selezione dei parametri di regolazione
 
-Come già accennato, i parametri di regolazione li abbiamo selezionati tramite convalida incrociata (CV) impiegando i mesi per la costruzione degli insiemi. La funzione di perdita scelta è il RMSE. La procedura per la costruzione degli insiemi è la seguente:
+Come già accennato, abbiamo selezionato i parametri di regolazione tramite convalida incrociata (CV) impiegando i mesi per la costruzione degli insiemi. La funzione di perdita scelta è il RMSE. La procedura per la costruzione degli insiemi è la seguente:
 
 - Selezione di $k$: il numero di insiemi di convalida (si sceglie $k = 4$);
 - Ogni insieme di convalida è composto da osservazioni raggruppate di $12 / k$ (3) mesi e i mesi rimanenti (9) vengono utilizzati per adattare il modello;
@@ -313,7 +314,7 @@ month_sets_ind = list(k4 = matrix(c(1, 5, 9, # used
                                   byrow = T,
                                   nrow = 4),
                       
-                      k6 = matrix(c(1, 7, # no used
+                      k6 = matrix(c(1, 7, # not used
                                     2, 8,
                                     3, 9,
                                     4, 10,
@@ -438,10 +439,10 @@ $$
 \sum_{i=1}^{L_{1}} \alpha_{1}^{i}=0, \quad \sum_{j=1}^{L_{2}} \alpha_{2}^{j}=0, \quad \sum_{i=1}^{L_{1}} \tilde{\alpha}_{1}^{i}=0, \quad \sum_{j=1}^{L_{2}} \tilde{\alpha}_{2}^{j}=0 \sum_{i=1}^{L_{1}} \alpha_{1: 2}^{i j}=0, \quad \sum_{j=1}^{L_{2}} \alpha_{1: 2}^{i j}=0
 $$
 
-Si nota che il coefficiente degli effetti principali stimato per la prima variabile è $\hat{\theta}_{1} =\hat{\alpha}_{1}+\hat{\tilde{\alpha}}_{1}$ e in modo analogo per la seconda variabile $\hat{\theta}_{2} =\hat{\alpha}_{2}+\hat{\tilde{\alpha}}_{2}$. Si può mostrare che il problema precedente è equivalente ad un problema di ottimizzazione Group LASSO senza vincoli sulle somme a zero e senza "sovrapposizione" di coefficienti
+Si nota che il coefficiente degli effetti principali stimato per la prima variabile è $\hat{\theta}_{1} =\hat{\alpha}_{1}+\hat{\tilde{\alpha}}_{1}$ e in modo analogo per la seconda variabile $\hat{\theta}_{2} =\hat{\alpha}_{2}+\hat{\tilde{\alpha}}_{2}$. Si può mostrare che il problema precedente è equivalente ad un problema di ottimizzazione Group LASSO senza vincoli sulle somme a zero e senza "sovrapposizione" di coefficienti.
 
 ### Standardizzazione
-In tutti i casi la matrice delle esplicative è standardizzata prima di adattare il modello, ma per HGLR sono standardizzate solo le esplicative continue, per cambiare questa opzione si dovrebbe modificare il codice, eventualità che non abbiamo considerato per motivi di tempo.
+In tutti i casi la matrice delle esplicative è standardizzata prima di adattare il modello, ma per HGLR sono standardizzate solo le esplicative continue, avendo provato a standardizzare solo le esplicative continue anche per gli altri metodi (non riportato) non abbiamo osservato differenze notevoli.
 
 ```{r, eval = bool_execute_heavy_chunks}
 models_summary$lasso <- Lasso_CV(month.cv.k4.sets,
@@ -460,17 +461,6 @@ models_summary$gglasso_no_kycd = GLasso_CV(cv.sets = month.cv.k4.sets.gg,
 save(models_summary, file = file_save_name)
 ```
 
-```{r, eval = bool_execute_heavy_chunks}
-models_summary$gglasso_yes_kycd = GLasso_CV(cv.sets = month.cv.k4.sets.gg,
-                                           my.lambda.vals = exp(seq(-10, -5, 0.1)) %>% sort(decreasing = T),
-                                           my.interactionPairs = matrix(c(1,6,
-                                                                          2,6,
-                                                                          3,6,
-                                                                          4,6,
-                                                                          5,6), byrow = T, ncol = 2))
-
-save(models_summary, file = file_save_name)
-```
 
 ```{r, warning = FALSE, eval = bool_execute_heavy_chunks}
 models_summary$scad = NonConvex_Cv(cv.sets = month.cv.k4.sets,
@@ -609,7 +599,7 @@ TwoParErrPlot(model_list = models_summary$elasticnet.poi,
 par(mfrow = c(1,1))
 ```
 
-Sia per SCAD che per MCP il $\lambda$ selezionato è prossimo a zero, provando ad aumentare ulteriormente $\gamma$ e diminuire $\lambda$ la soluzione sostanzialmente non cambia. (Figura \@ref(fig:fig-cv-err-scad-mcp))
+Sia per SCAD che per MCP il $\lambda$ selezionato è prossimo a zero (Figura \@ref(fig:fig-cv-err-scad-mcp))
 
 ```{r fig-cv-err-scad-mcp, fig.show='hold', out.width = OUT.WIDTH, out.height= OUT.HEIGHT,fig.cap="Curve di livello dell'errore di convalida incrociata in funzione dei parametri di regolazione per SCAD ed MCP del modello lineare"}
 
@@ -897,41 +887,6 @@ temp_vals = as.numeric(models_summary$gglasso_no_kycd$beta_df[,2])
 models_summary$gglasso_no_kycd$beta_df = data.frame(name = temp_names,
                                                     vals = temp_vals)
 
-# zero interaction terms
-
-# --------------------
-
-temp.fit = glinternet(X = df_2010_grouped_subsampled_gg[,-count_index] %>% as.matrix(),
-                  Y = log(df_2010_grouped_subsampled$count) -log(12),
-                  lambda = models_summary$gglasso_yes_kycd$lambda,
-                  numLevels = df_2010_numlevels,
-                  interactionPairs = matrix(c(1,6,
-                                              2,6,
-                                              3,6,
-                                              4,6,
-                                              5,6), byrow = T, ncol = 2))
-
-lmin_index = which(models_summary$gglasso_yes_kycd$lambda == models_summary$gglasso_yes_kycd$lmin)
-
-models_summary$gglasso_yes_kycd$beta = coef(temp.fit)[[lmin_index]]
-models_summary$gglasso_yes_kycd$test_error = RMSEfun(df_2011_grouped_subsampled$count, 
-                                          round(exp(predict(temp.fit, X = df_2011_grouped_subsampled_gg[,-count_index] %>% as.matrix())[lmin_index] + 
-                                                      log(12))))
-
-beta_df_cat = ExtractBetasMainCat(models_summary$gglasso_yes_kycd$beta, cat_names, temp_uniques_fact)
-beta_df_cont = ExtractBetasMainCont(models_summary$gglasso_yes_kycd$beta, cont_names)
-temp_df = rbind(beta_df_cat, beta_df_cont)
-
-models_summary$gglasso_yes_kycd$beta_df = rbind(beta_df_cat, beta_df_cont)
-
-temp_names = models_summary$gglasso_yes_kycd$beta_df[,1]
-temp_vals = as.numeric(models_summary$gglasso_yes_kycd$beta_df[,2])
-
-models_summary$gglasso_yes_kycd$beta_df = data.frame(name = temp_names,
-                                                    vals = temp_vals)
-
-# zero interaction terms
-
 # backup to save key model info
 save(models_summary, file = file_save_name)
 
@@ -952,8 +907,7 @@ models.errors = data.frame(model = c("lasso",
                                      "poisson_lasso.zeros",
                                      "poisson_lasso.zeros.1se",
                                      "poisson_elasticnet_zeros",
-                                     "HGLR_no_KY_CD",
-                                     "HGLR_yes_KY_CD"),
+                                     "HGLR_no_KY_CD"),
                            test_error = c(models_summary$lasso$test_error,
                                           models_summary$lasso$test_error1se,
                                           models_summary$elasticnet$test_error,
@@ -965,8 +919,7 @@ models.errors = data.frame(model = c("lasso",
                                           models_summary$lasso.poi.zeros$test_error,
                                           models_summary$lasso.poi.zeros$test_error_1se,
                                           models_summary$elasticnet.poi.zeros$test_error,
-                                          models_summary$gglasso_no_kycd$test_error,
-                                          models_summary$gglasso_yes_kycd$test_error))
+                                          models_summary$gglasso_no_kycd$test_error))
 
 kable(models.errors %>% arrange(test_error))
 ```
@@ -1046,8 +999,7 @@ models.zero.beta = data.frame(model = c("lasso",
                                      "poisson_lasso.zeros",
                                      "poisson_lasso.zeros.1se",
                                      "poisson_elasticnet_zeros",
-                                     "HGLR_no_KY_CD",
-                                     "HGLR_yes_KY_CD"),
+                                     "HGLR_no_KY_CD"),
                            not_null_ratio = c(models_summary$lasso$beta %>% SparsityRatio(),
                                           models_summary$lasso$beta1se %>% SparsityRatio(),
                                           models_summary$elasticnet$beta %>% SparsityRatio(),
@@ -1059,8 +1011,7 @@ models.zero.beta = data.frame(model = c("lasso",
                                           models_summary$lasso.poi.zeros$beta %>% SparsityRatio(),
                                           models_summary$lasso.poi.zeros$beta1se %>% SparsityRatio(),
                                           models_summary$elasticnet.poi.zeros$beta %>% SparsityRatio(),
-                                          nrow(models_summary$gglasso_no_kycd$beta_df) / ncol(df_2010_grouped_subsampled.matrix),
-                                          nrow(models_summary$gglasso_yes_kycd$beta_df) / ncol(df_2010_grouped_subsampled.matrix)))
+                                          nrow(models_summary$gglasso_no_kycd$beta_df) / ncol(df_2010_grouped_subsampled.matrix)))
 
 kable(models.zero.beta %>% arrange(not_null_ratio))
 ```
@@ -1147,7 +1098,7 @@ Tutti i gruppi di età presentao coefficienti positivi ad eccezione della fascia
 AGE_GROUP_betas %>% kable()
 ```
 
-In media, parità delle altre variabili il numero di arresti mensili passando dai 25-44 anni alla fascia 65+ aumenta moltiplicativamente di:
+In media, per i soli effetti marginali, a parità delle altre variabili il numero di arresti mensili passando dai 25-44 anni alla fascia 65+ aumenta moltiplicativamente di:
 
 ```{r}
 exp(AGE_GROUP_betas$beta[2] - AGE_GROUP_betas$beta[4])
